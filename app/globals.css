@@ -1,26 +1,607 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
+/*
+ * ============================================================================
+ * CMS DESIGN SYSTEM — SINGLE SOURCE OF TRUTH
+ * ============================================================================
+ * Every color, radius, shadow, and typography value used anywhere in the
+ * admin CMS traces back to a token defined in this file. Components must
+ * consume these via Tailwind utilities (bg-primary, text-muted-foreground,
+ * rounded-lg, shadow-sm, .text-page-title, …) — never hardcoded hex/rgb
+ * values, never a second, competing color system.
+ *
+ * This block maps our CSS custom properties (defined below, in :root/.dark)
+ * onto Tailwind's theme so plain utility classes pick them up automatically.
+ * Nothing here is shadcn-specific vocabulary we invented in parallel — these
+ * ARE the same --background/--primary/--border/etc. variables shadcn's own
+ * generated components already read, kept as the one coherent theme.
+ * ============================================================================
+ */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+
+  /* Sidebar (see the dedicated SIDEBAR section in :root below). */
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-active-foreground: var(--sidebar-active-foreground);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* Status — semantic tones for badges, banners, and inline feedback.
+     Follow the same "soft tint" convention this preset already uses for
+     --destructive (text-<tone> + bg-<tone>/10, never a solid fill) so
+     success/warning/info need no separate *-bg or *-foreground token. */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Restrained elevation — a premium CMS leans on borders/rings for
+     structure and uses shadow only to lift transient surfaces (dialogs,
+     popovers, dropdowns) a small, consistent amount off the page. */
+  --shadow-xs: 0 1px 2px oklch(0.1 0 0 / 0.04);
+  --shadow-sm: 0 1px 2px oklch(0.1 0 0 / 0.04), 0 1px 3px oklch(0.1 0 0 / 0.06);
+  --shadow-md: 0 2px 4px oklch(0.1 0 0 / 0.04), 0 4px 10px oklch(0.1 0 0 / 0.07);
+  --shadow-lg: 0 4px 8px oklch(0.1 0 0 / 0.05), 0 10px 24px oklch(0.1 0 0 / 0.09);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  /* ---------------------------------------------------------------------
+     PUBLIC SITE TOKENS
+     The marketing/public site (Header, Navbar, Hero, …) is a distinct
+     brand surface from the admin CMS above/below — deep navy + orange,
+     not the CMS's teal --primary/--accent. Referenced via Tailwind
+     arbitrary values, e.g. `bg-[var(--public-primary)]`, rather than
+     repeating the literal hex in every component.
+     --------------------------------------------------------------------- */
+  --public-primary: #00283b;
+  --public-accent: #ff7200;
+  /* Shared radius for public "feature" surfaces — cards (Doctor/Hospital/
+     Review/Specialized Care) and floating containers (the appointment
+     form, the blog editorial block). Previously drifted between two
+     near-identical hardcoded values (rounded-[20px] and rounded-[22px])
+     across components with no reason for the difference; one token now
+     backs all of them. */
+  --public-radius-card: 1.25rem;
+
+  /* ---------------------------------------------------------------------
+     BRAND / SURFACE
+     App canvas is a soft cool-neutral, not pure white — gives elevated
+     (card) surfaces something to visually lift off of.
+     --------------------------------------------------------------------- */
+  --background: oklch(0.975 0.002 195);
+  --foreground: oklch(0.18 0.01 195);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 195);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.01 195);
+  --primary: oklch(0.43 0.09 195);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.96 0.004 195);
+  --secondary-foreground: oklch(0.22 0.01 195);
+  --muted: oklch(0.96 0.004 195);
+  --muted-foreground: oklch(0.5 0.015 195);
+  --accent: oklch(0.955 0.025 195);
+  --accent-foreground: oklch(0.3 0.06 195);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.9 0.004 195);
+  --input: oklch(0.9 0.004 195);
+  --ring: oklch(0.43 0.09 195);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.55rem;
+
+  /* ---------------------------------------------------------------------
+     STATUS
+     Semantic tones only — actions/pages decide what "success" or
+     "warning" means for their own data, this just fixes the color.
+     --------------------------------------------------------------------- */
+  --success: oklch(0.55 0.13 152);
+  --warning: oklch(0.65 0.16 71);
+  --info: oklch(0.5 0.15 250);
+
+  /* ---------------------------------------------------------------------
+     SCROLLBAR
+     A translucent overlay of --foreground rather than a fixed gray, so
+     the same two tokens read correctly whether the scrolling surface
+     underneath is the page background, a card, or a popover — no
+     per-component scrollbar color needed anywhere in the CMS.
+     --------------------------------------------------------------------- */
+  --scrollbar-thumb: oklch(0.18 0.01 195 / 16%);
+  --scrollbar-thumb-hover: oklch(0.18 0.01 195 / 30%);
+
+  /* ---------------------------------------------------------------------
+     SIDEBAR
+     Deliberate two-tone shell: a deep teal-charcoal sidebar against the
+     light canvas above, instead of a near-invisible near-white sidebar
+     with just a hairline border. Three-step interaction ladder:
+     base (--sidebar) < hover (--sidebar-hover) < active (--sidebar-active),
+     so hovering an already-active item still reads as distinct from a
+     plain hover.
+     --------------------------------------------------------------------- */
+  --sidebar: oklch(0.22 0.025 200);
+  --sidebar-foreground: oklch(0.86 0.015 195);
+  --sidebar-primary: oklch(0.7 0.11 195);
+  --sidebar-primary-foreground: oklch(0.16 0.02 200);
+  --sidebar-hover: oklch(0.265 0.028 200);
+  --sidebar-active: oklch(0.3 0.032 200);
+  --sidebar-active-foreground: oklch(0.97 0.01 195);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.7 0.11 195);
+  /* A white overlay, not --sidebar-hover/--sidebar-active — those two are
+     only ~0.04 apart in lightness from --sidebar (by design, for a subtle
+     row-hover ladder), which reads as essentially invisible as a
+     scrollbar thumb. The sidebar is dark in both themes, so one pair of
+     values covers both. */
+  --sidebar-scrollbar-thumb: oklch(1 0 0 / 18%);
+  --sidebar-scrollbar-thumb-hover: oklch(1 0 0 / 32%);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.65 0.1 195);
+  --primary-foreground: oklch(0.145 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.65 0.1 195);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+
+  --success: oklch(0.72 0.15 152);
+  --warning: oklch(0.78 0.15 71);
+  --info: oklch(0.7 0.16 250);
+
+  /* Same overlay approach as :root, using white instead of --foreground —
+     mirrors this theme's existing dark-mode convention for --border/--input
+     (also white-alpha overlays rather than solid grays). */
+  --scrollbar-thumb: oklch(1 0 0 / 16%);
+  --scrollbar-thumb-hover: oklch(1 0 0 / 26%);
+
+  --sidebar: oklch(0.19 0.01 195);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.65 0.1 195);
+  --sidebar-primary-foreground: oklch(0.145 0 0);
+  --sidebar-hover: oklch(0.235 0.012 195);
+  --sidebar-active: oklch(0.269 0 0);
+  --sidebar-active-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.65 0.1 195);
+  --sidebar-scrollbar-thumb: oklch(1 0 0 / 18%);
+  --sidebar-scrollbar-thumb-hover: oklch(1 0 0 / 32%);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    /* Firefox — Chromium/WebKit are handled by the ::-webkit-scrollbar
+       rules below. Applied on the universal selector (not a utility class)
+       so every scrollable surface in the CMS gets the same slim, minimal
+       scrollbar automatically: page body, the admin content area, table/
+       overflow-x-auto wrappers, dialogs/sheets, dropdown/select/popover
+       content, the rich-text editor, … — with zero per-component CSS. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+
+  /* ---------------------------------------------------------------------
+     SCROLLBAR — WebKit/Blink (Chrome, Edge, Safari)
+     Slim (8px), transparent track, rounded translucent thumb that darkens
+     slightly on hover — replaces the browser's default thick scrollbar
+     everywhere, using only the --scrollbar-thumb(-hover) tokens above so
+     light/dark stay in sync automatically. Purely visual: does not affect
+     keyboard/wheel/touch scrolling or any ARIA semantics.
+     ------------------------------------------------------------------- */
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  /* Some platforms render classic up/down "step" arrow buttons at the
+     track ends once a scrollbar is custom-styled — suppressing them keeps
+     the flat, minimal look intact everywhere instead of only on
+     platforms/browsers that happen to omit them by default. */
+  *::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Slow rotating dashed ring behind the Reviews showcase's center-stage
+   avatar (components/public/home/ReviewsCarousel.tsx) — a plain CSS
+   keyframe since it needs to loop indefinitely and independently of any
+   component re-render, unlike the click-triggered motion/react
+   transitions elsewhere in that component. */
+@keyframes spinSlow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-spin-slow {
+  animation: spinSlow 30s linear infinite;
+}
+
+/* ---------------------------------------------------------------------
+   PUBLIC SITE — SHARED CONTENT CONTAINER
+   The one horizontal-layout container for every public-site section
+   (Hero, Overview, Treatments, Doctors, Testimonials, header/footer, …).
+   Before this existed, ~24 public components each repeated their own
+   `mx-auto max-w-7xl px-4 sm:px-6 lg:px-8` (Tailwind's default max-w-7xl
+   = 1280px) — a narrow, fixed cap that left 100px+ of empty gutter on
+   both sides at common laptop widths (1366/1440) well before it ever
+   reached that cap. `.public-container` replaces all of those inline
+   repeats with one class, and lets the content width itself grow in
+   steps at those specific real-world breakpoints (rather than jumping
+   straight to a single max-width), so desktop viewports actually use
+   more of the available width while mobile/tablet gutters stay exactly
+   as compact as before. A section's own full-width background (if any)
+   stays outside this container — only the inner content row uses it,
+   per the established `<section class="bg-...">` -> `<div class=
+   "public-container">` composition already used throughout.
+   --------------------------------------------------------------------- */
+@utility public-container {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: 1rem;
+
+  @media (min-width: 768px) {
+    padding-inline: 1.5rem;
+  }
+
+  @media (min-width: 1024px) {
+    max-width: 1024px;
+    padding-inline: 1.25rem;
+  }
+
+  @media (min-width: 1280px) {
+    max-width: 1280px;
+    padding-inline: 2.5rem;
+  }
+
+  @media (min-width: 1366px) {
+    max-width: 1366px;
+    padding-inline: 3rem;
+  }
+
+  @media (min-width: 1440px) {
+    max-width: 1440px;
+    padding-inline: 3.75rem;
+  }
+}
+@layer components {
+  /* -------------------------------------------------------------------
+     TYPOGRAPHY SYSTEM
+     One semantic scale for the entire CMS — every page/module reaches
+     for one of these classes instead of picking its own font-size.
+       Page Title      26px / 700   — .text-page-title
+       Section Heading 18px / 600   — .text-section-title
+       Subheading      15px / 600   — .text-subtitle
+       Body            14px / 400   — .text-body
+       Body Small      13px / 400   — .text-body-sm
+       Label           13px / 500   — .text-label
+       Caption         12px / 500   — .text-caption (muted)
+       Helper text     12px / 400   — .text-helper (muted, for field hints/errors)
+       Table header    11px / 600   — .text-table-header (muted, uppercase)
+       Table body      13.5px / 400 — .text-table-body
+       Nav item        14px / 500   — .text-nav
+       Nav child item  13.5px / 500 — .text-nav-child
+       Button label    14px / 500   — .text-button
+       Breadcrumb      13px / 400   — .text-breadcrumb (muted)
+       Error text      12px / 400   — .text-error (destructive)
+     ------------------------------------------------------------------- */
+  .text-page-title {
+    font-size: 1.625rem;
+    line-height: 1.25;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .text-section-title {
+    font-size: 1.125rem;
+    line-height: 1.3;
+    font-weight: 600;
+  }
+  .text-subtitle {
+    font-size: 0.9375rem;
+    line-height: 1.4;
+    font-weight: 600;
+  }
+  .text-body {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    font-weight: 400;
+  }
+  .text-body-sm {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    font-weight: 400;
+  }
+  .text-label {
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    font-weight: 500;
+  }
+  .text-caption {
+    font-size: 0.75rem;
+    line-height: 1.3;
+    font-weight: 500;
+    @apply text-muted-foreground;
+  }
+  .text-helper {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    font-weight: 400;
+    @apply text-muted-foreground;
+  }
+  .text-table-header {
+    font-size: 0.6875rem;
+    line-height: 1;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    @apply text-muted-foreground/85;
+  }
+  .text-table-body {
+    font-size: 0.84375rem;
+    line-height: 1.4;
+    font-weight: 400;
+  }
+  .text-nav {
+    font-size: 0.875rem;
+    line-height: 1.3;
+    font-weight: 500;
+  }
+  .text-nav-child {
+    font-size: 0.84375rem;
+    line-height: 1.3;
+    font-weight: 500;
+  }
+  .text-button {
+    font-size: 0.875rem;
+    line-height: 1;
+    font-weight: 500;
+  }
+  .text-breadcrumb {
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    font-weight: 400;
+    @apply text-muted-foreground;
+  }
+  .text-error {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    font-weight: 400;
+    @apply text-destructive;
+  }
+
+  /* -------------------------------------------------------------------
+     SIDEBAR SCROLL
+     The sidebar's own nav container overrides the global scrollbar
+     thumb color (above) with the sidebar's own light-on-dark tokens —
+     the generic --scrollbar-thumb is a translucent *dark* overlay
+     (works over the light canvas/cards/popovers) and would be almost
+     invisible against the sidebar's dark surface. Same width/shape as
+     the global scrollbar, just a color swap, so it still reads as one
+     consistent scrollbar system rather than a one-off.
+     ------------------------------------------------------------------- */
+  .sidebar-nav-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--sidebar-scrollbar-thumb) transparent;
+  }
+  .sidebar-nav-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+  .sidebar-nav-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-nav-scroll::-webkit-scrollbar-thumb {
+    background-color: var(--sidebar-scrollbar-thumb);
+    border-radius: 9999px;
+  }
+  .sidebar-nav-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: var(--sidebar-scrollbar-thumb-hover);
+  }
+
+  /* -------------------------------------------------------------------
+     RICH TEXT EDITOR CONTENT
+     Scopes semantic HTML styling (headings, lists, links, tables, …) to
+     the Tiptap-backed `body`/`description` editor used by Pages and
+     Doctor Pages — reuses the same tokens as the rest of the CMS instead
+     of a competing prose/typography system. Applied to the ProseMirror
+     content element (via editorProps.attributes.class) and reused as-is
+     when rendering that same HTML back in the read-only View dialogs.
+     ------------------------------------------------------------------- */
+  .rte-content {
+    @apply text-foreground outline-none;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+  .rte-content > * + * {
+    margin-top: 0.75em;
+  }
+  .rte-content h1,
+  .rte-content h2,
+  .rte-content h3,
+  .rte-content h4 {
+    @apply font-heading font-semibold text-foreground;
+    line-height: 1.3;
+  }
+  .rte-content h1 {
+    font-size: 1.5rem;
+  }
+  .rte-content h2 {
+    font-size: 1.25rem;
+  }
+  .rte-content h3 {
+    font-size: 1.0625rem;
+  }
+  .rte-content h4 {
+    font-size: 0.9375rem;
+  }
+  .rte-content ul,
+  .rte-content ol {
+    padding-left: 1.375rem;
+  }
+  .rte-content ul {
+    list-style: disc;
+  }
+  .rte-content ol {
+    list-style: decimal;
+  }
+  .rte-content li p {
+    margin-top: 0;
+  }
+  .rte-content a {
+    @apply text-primary underline underline-offset-2;
+  }
+  .rte-content blockquote {
+    @apply border-l-2 border-border text-muted-foreground;
+    padding-left: 0.875rem;
+    font-style: italic;
+  }
+  .rte-content hr {
+    @apply border-border;
+    margin: 1.25em 0;
+  }
+  .rte-content img {
+    @apply rounded-md border border-border;
+    max-width: 100%;
+    height: auto;
+  }
+  .rte-content img[data-align="left"] {
+    display: block;
+    margin-right: auto;
+    margin-left: 0;
+  }
+  .rte-content img[data-align="center"] {
+    display: block;
+    margin-right: auto;
+    margin-left: auto;
+  }
+  .rte-content img[data-align="right"] {
+    display: block;
+    margin-right: 0;
+    margin-left: auto;
+  }
+  .rte-content table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 100%;
+  }
+  .rte-content th,
+  .rte-content td {
+    @apply border border-border;
+    padding: 0.375rem 0.625rem;
+    text-align: left;
+    vertical-align: top;
+    position: relative;
+  }
+  .rte-content th {
+    @apply bg-muted;
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+  .rte-content .selectedCell {
+    @apply bg-accent;
+  }
+  .rte-content .column-resize-handle {
+    @apply bg-primary;
+    position: absolute;
+    top: 0;
+    right: -2px;
+    bottom: 0;
+    width: 4px;
+    pointer-events: none;
+  }
+
+  /* Tiptap's Placeholder extension marks the empty first node with
+     `is-editor-empty` and exposes the placeholder text via `data-placeholder`
+     rather than rendering it as real content. */
+  .rte-content p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    @apply text-muted-foreground;
+  }
 }

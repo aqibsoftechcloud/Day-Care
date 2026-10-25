@@ -1,0 +1,1868 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model actions {
+  id          Int           @id @default(autoincrement()) @db.UnsignedInt
+  name        String        @unique(map: "uq_actions_name") @db.VarChar(50)
+  slug        String        @unique(map: "uq_actions_slug") @db.VarChar(50)
+  permissions permissions[]
+}
+
+model modules {
+  id            Int            @id @default(autoincrement()) @db.UnsignedInt
+  parent_id     Int?           @db.UnsignedInt
+  name          String         @db.VarChar(100)
+  slug          String         @unique(map: "uq_modules_slug") @db.VarChar(100)
+  sorting_order Int            @default(0)
+  status        modules_status @default(active)
+  created_at    DateTime       @default(now()) @db.Timestamp(0)
+  updated_at    DateTime       @default(now()) @db.Timestamp(0)
+  modules       modules?       @relation("modulesTomodules", fields: [parent_id], references: [id], onDelete: Restrict, map: "fk_modules_parent")
+  other_modules modules[]      @relation("modulesTomodules")
+  permissions   permissions[]
+
+  @@index([parent_id], map: "fk_modules_parent")
+}
+
+model permissions {
+  id               Int                @id @default(autoincrement()) @db.UnsignedInt
+  module_id        Int                @db.UnsignedInt
+  action_id        Int                @db.UnsignedInt
+  name             String             @unique(map: "uq_permissions_name") @db.VarChar(150)
+  created_at       DateTime           @default(now()) @db.Timestamp(0)
+  actions          actions            @relation(fields: [action_id], references: [id], onDelete: Cascade, map: "fk_permissions_action")
+  modules          modules            @relation(fields: [module_id], references: [id], onDelete: Cascade, map: "fk_permissions_module")
+  role_permissions role_permissions[]
+
+  @@unique([module_id, action_id], map: "uq_permissions_module_action")
+  @@index([action_id], map: "fk_permissions_action")
+}
+
+model role_permissions {
+  role_id       Int         @db.UnsignedInt
+  permission_id Int         @db.UnsignedInt
+  permissions   permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade, map: "fk_role_permissions_permission")
+  roles         roles       @relation(fields: [role_id], references: [id], onDelete: Cascade, map: "fk_role_permissions_role")
+
+  @@id([role_id, permission_id])
+  @@index([permission_id], map: "fk_role_permissions_permission")
+}
+
+model roles {
+  id               Int                @id @default(autoincrement()) @db.UnsignedInt
+  name             String             @unique(map: "uq_roles_name") @db.VarChar(100)
+  description      String?            @db.VarChar(255)
+  status           roles_status       @default(active)
+  created_at       DateTime           @default(now()) @db.Timestamp(0)
+  updated_at       DateTime           @default(now()) @db.Timestamp(0)
+  role_permissions role_permissions[]
+  users            users[]
+}
+
+model users {
+  id         Int          @id @default(autoincrement()) @db.UnsignedInt
+  name       String       @db.VarChar(150)
+  email      String       @unique(map: "uq_users_email") @db.VarChar(255)
+  password   String       @db.VarChar(255)
+  role_id    Int          @db.UnsignedInt
+  status     users_status @default(active)
+  // Bumped to revoke every outstanding session JWT of this user (logout, password change).
+  session_version Int     @default(0) @db.UnsignedInt
+  created_at DateTime     @default(now()) @db.Timestamp(0)
+  updated_at DateTime     @default(now()) @db.Timestamp(0)
+  roles      roles        @relation(fields: [role_id], references: [id], map: "fk_users_role")
+
+  @@index([role_id], map: "idx_users_role_id")
+}
+
+model appointment_leads {
+  id           Int       @id @default(autoincrement()) @db.UnsignedInt
+  first_name   String    @db.VarChar(100)
+  last_name    String    @db.VarChar(100)
+  email        String    @db.VarChar(255)
+  phone_number String    @db.VarChar(30)
+  // Set by the configurable consultation form. Deliberately plain columns, NOT
+  // foreign keys — a lead is historical data and must survive a city/treatment
+  // being deleted or deactivated. Display-name snapshots live in extra_data.
+  city_id             Int?      @db.UnsignedInt
+  treatment_id        Int?      @db.UnsignedInt // a city-scoped `treatments` row
+  global_treatment_id Int?      @db.UnsignedInt // a `global_treatments` row
+  // Every answer to a non-column field (custom admin-added fields + the
+  // city/treatment label snapshots), as [{ key, label, value }] — so renaming
+  // or removing a form field later never loses what a visitor submitted.
+  extra_data   Json?
+  created_at   DateTime  @default(now()) @db.Timestamp(0)
+  updated_at   DateTime  @default(now()) @db.Timestamp(0)
+  deleted_at   DateTime? @db.Timestamp(0)
+
+  @@index([created_at], map: "idx_appointment_leads_created_at")
+  @@index([city_id], map: "idx_appointment_leads_city_id")
+  @@index([email], map: "idx_appointment_leads_email")
+}
+
+model banners {
+  id                  Int            @id @default(autoincrement()) @db.UnsignedInt
+  banner_name         String         @db.VarChar(255)
+  banner_url          String?        @db.VarChar(500)
+  banner_image        String         @db.VarChar(500)
+  mobile_banner_image String?        @db.VarChar(500)
+  city_id             Int            @db.UnsignedInt
+  sorting_order       Int            @default(0)
+  status              banners_status @default(active)
+  created_at          DateTime       @default(now()) @db.Timestamp(0)
+  updated_at          DateTime       @default(now()) @db.Timestamp(0)
+  cities              cities         @relation(fields: [city_id], references: [id], map: "fk_banners_city")
+
+  @@index([city_id], map: "idx_banners_city_id")
+  @@index([sorting_order], map: "idx_banners_sorting_order")
+  @@index([status], map: "idx_banners_status")
+}
+
+model blog_categories {
+  id                                       Int                                        @id @default(autoincrement()) @db.UnsignedInt
+  category_name                            String                                     @db.VarChar(255)
+  meta_title                               String?                                    @db.VarChar(255)
+  meta_description                         String?                                    @db.Text
+  meta_keywords                            String?                                    @db.VarChar(500)
+  seo_url                                  String                                     @unique(map: "uq_blog_categories_seo_url") @db.VarChar(255)
+  status                                   blog_categories_status                     @default(active)
+  created_at                               DateTime                                   @default(now()) @db.Timestamp(0)
+  updated_at                               DateTime                                   @default(now()) @db.Timestamp(0)
+  blogs                                    blogs[]
+  blog_category_global_speciality_mappings blog_category_global_speciality_mappings[]
+  blog_category_global_treatment_mappings  blog_category_global_treatment_mappings[]
+
+  @@index([status], map: "idx_blog_categories_status")
+}
+
+/**
+ * Many-to-many: the DEFAULT Related Reading specialities for every blog in this category — only used as a fallback when a blog has no explicit speciality association of its own (see blog_global_speciality_mappings and services/blog.service.ts's getBlogs()).
+ */
+model blog_category_global_speciality_mappings {
+  blog_category_id     Int                 @db.UnsignedInt
+  global_speciality_id Int                 @db.UnsignedInt
+  blog_categories      blog_categories     @relation(fields: [blog_category_id], references: [id], onDelete: Cascade, map: "fk_blog_cat_gs_mappings_category")
+  global_specialities  global_specialities @relation(fields: [global_speciality_id], references: [id], onDelete: Cascade, map: "fk_blog_cat_gs_mappings_speciality")
+
+  @@id([blog_category_id, global_speciality_id])
+  @@index([global_speciality_id], map: "idx_blog_cat_gs_mappings_speciality_id")
+}
+
+/**
+ * Many-to-many: the DEFAULT Related Reading treatments for every blog in this category — same fallback-only role as blog_category_global_speciality_mappings above.
+ */
+model blog_category_global_treatment_mappings {
+  blog_category_id    Int               @db.UnsignedInt
+  global_treatment_id Int               @db.UnsignedInt
+  blog_categories     blog_categories   @relation(fields: [blog_category_id], references: [id], onDelete: Cascade, map: "fk_blog_cat_gt_mappings_category")
+  global_treatments   global_treatments @relation(fields: [global_treatment_id], references: [id], onDelete: Cascade, map: "fk_blog_cat_gt_mappings_treatment")
+
+  @@id([blog_category_id, global_treatment_id])
+  @@index([global_treatment_id], map: "idx_blog_cat_gt_mappings_treatment_id")
+}
+
+model blog_faqs {
+  id            Int              @id @default(autoincrement()) @db.UnsignedInt
+  blog_id       Int              @db.UnsignedInt
+  title         String           @db.VarChar(255)
+  text          String           @db.Text
+  sorting_order Int              @default(0)
+  status        blog_faqs_status @default(active)
+  created_at    DateTime         @default(now()) @db.Timestamp(0)
+  updated_at    DateTime         @default(now()) @db.Timestamp(0)
+  blogs         blogs            @relation(fields: [blog_id], references: [id], onDelete: Cascade, map: "fk_blog_faqs_blog")
+
+  @@index([blog_id], map: "idx_blog_faqs_blog_id")
+  @@index([status], map: "idx_blog_faqs_status")
+  @@index([sorting_order], map: "idx_blog_faqs_sorting_order")
+}
+
+model blogs {
+  id                              Int                               @id @default(autoincrement()) @db.UnsignedInt
+  blog_category_id                Int                               @db.UnsignedInt
+  blog_title                      String                            @db.VarChar(255)
+  meta_title                      String?                           @db.VarChar(255)
+  meta_description                String?                           @db.Text
+  meta_keywords                   String?                           @db.VarChar(500)
+  seo_url                         String                            @unique(map: "uq_blogs_seo_url") @db.VarChar(255)
+  language_id                     Int                               @db.UnsignedInt
+  // NULL = a GLOBAL blog (not tied to any city) - the same convention `pages.city_id` / `menus.city_id` use. A city blog always has a real city.
+  city_id                         Int?                              @db.UnsignedInt
+  blog_image                      String?                           @db.VarChar(500)
+  published_date                  DateTime?                         @db.DateTime(0)
+  search_keywords_for_doctors     String?                           @db.VarChar(500)
+  blog_status                     blogs_blog_status                 @default(active)
+  ai_content_generator            Boolean                           @default(false)
+  blog_text                       String?                           @db.LongText
+  author_name                     String?                           @db.VarChar(255)
+  author_image                    String?                           @db.VarChar(500)
+  is_featured                     Boolean                           @default(false)
+  created_at                      DateTime                          @default(now()) @db.Timestamp(0)
+  updated_at                      DateTime                          @default(now()) @db.Timestamp(0)
+  blog_faqs                       blog_faqs[]
+  blog_categories                 blog_categories                   @relation(fields: [blog_category_id], references: [id], map: "fk_blogs_category")
+  // Restrict (not SetNull): deleting a city must never silently turn its blogs global.
+  cities                          cities?                           @relation(fields: [city_id], references: [id], onDelete: Restrict, map: "fk_blogs_city")
+  languages                       languages                         @relation(fields: [language_id], references: [id], map: "fk_blogs_language")
+  blog_global_speciality_mappings blog_global_speciality_mappings[]
+  blog_global_treatment_mappings  blog_global_treatment_mappings[]
+
+  @@index([blog_category_id], map: "idx_blogs_category_id")
+  @@index([city_id], map: "idx_blogs_city_id")
+  @@index([language_id], map: "idx_blogs_language_id")
+  @@index([published_date], map: "idx_blogs_published_date")
+  @@index([blog_status], map: "idx_blogs_status")
+  @@index([is_featured], map: "idx_blogs_is_featured")
+}
+
+model bookaform_data {
+  id         Int                   @id @default(autoincrement()) @db.UnsignedInt
+  data_from  String                @db.VarChar(255)
+  status     bookaform_data_status @default(active)
+  created_at DateTime              @default(now()) @db.Timestamp(0)
+  updated_at DateTime              @default(now()) @db.Timestamp(0)
+
+  @@index([status], map: "idx_bookaform_data_status")
+}
+
+model cities {
+  id               Int            @id @default(autoincrement()) @db.UnsignedInt
+  language_id      Int            @db.UnsignedInt
+  city_name        String         @db.VarChar(150)
+  meta_title       String?        @db.VarChar(255)
+  meta_description String?        @db.Text
+  meta_keywords    String?        @db.VarChar(500)
+  seo_url          String         @unique(map: "uq_cities_seo_url") @db.VarChar(255)
+  status           cities_status  @default(active)
+  created_at       DateTime       @default(now()) @db.Timestamp(0)
+  updated_at       DateTime       @default(now()) @db.Timestamp(0)
+  banners                 banners[]
+  blogs                   blogs[]
+  languages               languages                 @relation(fields: [language_id], references: [id], map: "fk_cities_language")
+  doctor_pages            doctor_pages[]
+  doctors                 doctors[]
+  hospitals               hospitals[]
+  locations               locations[]
+  menus                   menus[]
+  pages                   pages[]
+  specialities            specialities[]
+  testimonials            testimonials[]
+  treatments              treatments[]
+  homepage_icon_settings  homepage_icon_settings[]
+
+  @@index([language_id], map: "idx_cities_language_id")
+  @@index([status], map: "idx_cities_status")
+}
+
+/**
+ * Admin-configurable icon choices for the three homepage sections (Hero
+ * Statistics row, Why Choose Day Care Surgeries, Our Locations). Exactly
+ * one row has `city_id: null` — the GLOBAL defaults row, always accessed
+ * by its fixed `id = 1`, same "single-row, service-enforced" convention
+ * `website_theme_settings` already uses (see that model's own doc
+ * comment) — never a second global row. Every OTHER row has a real,
+ * unique `city_id` and holds that one city's overrides ONLY for the keys
+ * an admin explicitly set; a key absent from `icons` means "not
+ * overridden — inherit the global row's value for that key, or the
+ * hardcoded safe default if the global row has none either." `icons` is
+ * a partial `Record<IconKey, HomepageIconValue>` — intentionally Json,
+ * like `website_theme_settings.tokens`, since both are "a flexible map
+ * of named values," not a fixed set of dedicated columns. Each stored
+ * value is a tagged union (`{type: "lucide", name}` or `{type: "custom",
+ * assetId}`, see types/homepage-icon-settings.ts) — never a bare string
+ * — so a Lucide icon name can never be confused with a reference into
+ * `homepage_custom_icons` below. A legacy plain-string value (written
+ * before this distinction existed) is still read correctly: the service
+ * layer treats it as `{type: "lucide", name: <that string>}`.
+ */
+model homepage_icon_settings {
+  id         Int      @id @default(autoincrement()) @db.UnsignedInt
+  city_id    Int?     @db.UnsignedInt
+  icons      Json
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  updated_at DateTime @default(now()) @db.Timestamp(0)
+  cities     cities?  @relation(fields: [city_id], references: [id], onDelete: Cascade, map: "fk_homepage_icon_settings_city")
+
+  @@unique([city_id], map: "uq_homepage_icon_settings_city_id")
+}
+
+/**
+ * Admin-uploaded custom icon assets for Homepage Icons — a small,
+ * feature-scoped asset registry, not a general-purpose media library
+ * (this project has none; every other upload — doctor photos, hospital
+ * images, global treatment images, … — stores its path directly on the
+ * owning row, with no separate media table at all). A dedicated table is
+ * needed here specifically because one uploaded icon can be referenced
+ * by MANY `homepage_icon_settings` rows/keys at once (the global row,
+ * any number of city overrides, across all three sections) — storing a
+ * real database id (not a path string) is what the "typed, validated
+ * representation" requirement in `HomepageIconValue` actually depends
+ * on; the file itself is still stored via the existing `storageProvider`
+ * abstraction (lib/storage), same as every other upload.
+ *
+ * `file_name` is the original uploaded filename, kept for display only
+ * (never used to build a path — `storageProvider.upload()` always
+ * returns a randomized path, same as every other upload in this
+ * project). `width`/`height` are null for a vector SVG upload (no
+ * intrinsic pixel size); always set for a raster upload (PNG/WebP/JPEG),
+ * extracted server-side at upload time, never trusted from the client.
+ * No `status`/soft-delete column: deleting a referenced asset is
+ * refused outright by the service layer (see
+ * `services/homepage-custom-icon.service.ts`'s `deleteHomepageCustomIcon`
+ * — the "do not delete a media asset that is still referenced"
+ * requirement), so a row only ever exists while genuinely available to
+ * use; an unreferenced one is hard-deleted, not archived.
+ */
+model homepage_custom_icons {
+  id         Int      @id @default(autoincrement()) @db.UnsignedInt
+  file_name  String   @db.VarChar(255)
+  path       String   @db.VarChar(500)
+  mime_type  String   @db.VarChar(100)
+  width      Int?     @db.UnsignedInt
+  height     Int?     @db.UnsignedInt
+  file_size  Int      @db.UnsignedInt
+  /// Unused. A CSS `mask-image`-based theme-recoloring feature briefly
+  /// wrote/read this column, but proved unreliable for real uploaded PNGs
+  /// (the mask's fill color depended on a CSS custom property with no
+  /// static stylesheet fallback, so it could silently render fully
+  /// transparent) and was reverted. The public renderer
+  /// (`components/public/home/HomepageIconGlyph.tsx`) no longer reads this
+  /// field — uploaded icons always render with their own saved colors.
+  /// Left in place rather than dropped to avoid an unnecessary migration;
+  /// safe to remove in a future cleanup migration if desired.
+  recolor    Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  updated_at DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([created_at], map: "idx_homepage_custom_icons_created_at")
+}
+
+/**
+ * Doctor-specific Awards & Recognitions — per-doctor only, never shared or
+ * generic. Same architecture as `hospital_faqs`/`speciality_faqs` (own
+ * table, `doctor_id` FK with cascade delete, soft-delete via `status`).
+ */
+model doctor_awards {
+  id           Int                  @id @default(autoincrement()) @db.UnsignedInt
+  doctor_id    Int                  @db.UnsignedInt
+  title        String               @db.VarChar(255)
+  organization String?              @db.VarChar(255)
+  award_year   String?              @db.VarChar(50)
+  description  String?              @db.Text
+  status       doctor_awards_status @default(active)
+  created_at   DateTime             @default(now()) @db.Timestamp(0)
+  updated_at   DateTime             @default(now()) @db.Timestamp(0)
+  doctors      doctors              @relation(fields: [doctor_id], references: [id], onDelete: Cascade, map: "fk_doctor_awards_doctor")
+
+  @@index([doctor_id], map: "idx_doctor_awards_doctor_id")
+  @@index([status], map: "idx_doctor_awards_status")
+}
+
+/**
+ * Doctor-specific FAQs — per-doctor only. Same `title`/`text` shape as
+ * every other `*_faqs` table in this schema (`hospital_faqs`,
+ * `speciality_faqs`, `treatment_faqs`, `global_treatment_faqs`): `title`
+ * is the question, `text` is the plain-text answer. Deliberately NOT
+ * rich/HTML text — no `*_faqs` table in this schema stores HTML, so this
+ * stays consistent rather than introducing a one-off rich-text answer
+ * field.
+ */
+model doctor_faqs {
+  id         Int               @id @default(autoincrement()) @db.UnsignedInt
+  doctor_id  Int               @db.UnsignedInt
+  title      String            @db.VarChar(255)
+  text       String            @db.Text
+  status     doctor_faqs_status @default(active)
+  created_at DateTime          @default(now()) @db.Timestamp(0)
+  updated_at DateTime          @default(now()) @db.Timestamp(0)
+  doctors    doctors           @relation(fields: [doctor_id], references: [id], onDelete: Cascade, map: "fk_doctor_faqs_doctor")
+
+  @@index([doctor_id], map: "idx_doctor_faqs_doctor_id")
+  @@index([status], map: "idx_doctor_faqs_status")
+}
+
+model doctor_hospitals {
+  doctor_id   Int       @db.UnsignedInt
+  hospital_id Int       @db.UnsignedInt
+  doctors     doctors   @relation(fields: [doctor_id], references: [id], onDelete: Cascade, map: "fk_doctor_hospitals_doctor")
+  hospitals   hospitals @relation(fields: [hospital_id], references: [id], onDelete: Cascade, map: "fk_doctor_hospitals_hospital")
+
+  @@id([doctor_id, hospital_id])
+  @@index([hospital_id], map: "idx_doctor_hospitals_hospital_id")
+}
+
+model doctor_pages {
+  id               Int                 @id @default(autoincrement()) @db.UnsignedInt
+  pagename         String              @db.VarChar(255)
+  keyword          String?             @db.VarChar(500)
+  meta_title       String?             @db.VarChar(255)
+  meta_description String?             @db.Text
+  meta_keywords    String?             @db.VarChar(500)
+  seo_url          String              @unique(map: "uq_doctor_pages_seo_url") @db.VarChar(255)
+  city_id          Int                 @db.UnsignedInt
+  location_id      Int?                @db.UnsignedInt
+  speciality_id    Int                 @db.UnsignedInt
+  description      String?             @db.LongText
+  status           doctor_pages_status @default(active)
+  created_at       DateTime            @default(now()) @db.Timestamp(0)
+  updated_at       DateTime            @default(now()) @db.Timestamp(0)
+  cities           cities              @relation(fields: [city_id], references: [id], map: "fk_doctor_pages_city")
+  locations        locations?          @relation(fields: [location_id], references: [id], onDelete: Restrict, map: "fk_doctor_pages_location")
+  specialities     specialities        @relation(fields: [speciality_id], references: [id], map: "fk_doctor_pages_speciality")
+
+  @@index([city_id], map: "idx_doctor_pages_city_id")
+  @@index([location_id], map: "idx_doctor_pages_location_id")
+  @@index([speciality_id], map: "idx_doctor_pages_speciality_id")
+  @@index([status], map: "idx_doctor_pages_status")
+}
+
+model doctor_specialities {
+  id                         Int                          @id @default(autoincrement()) @db.UnsignedInt
+  language_id                Int                          @db.UnsignedInt
+  speciality_name            String                       @db.VarChar(255)
+  seo_url                    String                       @unique(map: "uq_doctor_specialities_seo_url") @db.VarChar(255)
+  status                     doctor_specialities_status   @default(active)
+  created_at                 DateTime                     @default(now()) @db.Timestamp(0)
+  updated_at                 DateTime                     @default(now()) @db.Timestamp(0)
+  languages                  languages                    @relation(fields: [language_id], references: [id], map: "fk_doctor_specialities_language")
+  doctor_speciality_mappings doctor_speciality_mappings[]
+  specialities               specialities[]
+
+  @@index([language_id], map: "idx_doctor_specialities_language_id")
+  @@index([status], map: "idx_doctor_specialities_status")
+}
+
+model doctor_speciality_mappings {
+  doctor_id            Int                 @db.UnsignedInt
+  doctor_speciality_id Int                 @db.UnsignedInt
+  doctors              doctors             @relation(fields: [doctor_id], references: [id], onDelete: Cascade, map: "fk_doctor_specialities_doctor")
+  doctor_specialities  doctor_specialities @relation(fields: [doctor_speciality_id], references: [id], onDelete: Cascade, map: "fk_doctor_speciality_mappings_speciality")
+
+  @@id([doctor_id, doctor_speciality_id])
+  @@index([doctor_speciality_id], map: "idx_doctor_specialities_speciality_id")
+}
+
+model doctors {
+  id                         Int                          @id @default(autoincrement()) @db.UnsignedInt
+  language_id                Int                          @db.UnsignedInt
+  doctor_name                String                       @db.VarChar(255)
+  meta_title                 String?                      @db.VarChar(255)
+  seo_url                    String                       @unique(map: "uq_doctors_seo_url") @db.VarChar(255)
+  meta_description           String?                      @db.Text
+  meta_keywords              String?                      @db.VarChar(500)
+  qualification              String?                      @db.VarChar(500)
+  experience                 String?                      @db.VarChar(255)
+  availability               String?                      @db.VarChar(255)
+  city_id                    Int                          @db.UnsignedInt
+  location_id                Int?                         @db.UnsignedInt
+  patient_satisfaction_score Decimal?                     @db.Decimal(5, 2)
+  sorting_order              Int                          @default(0)
+  doctor_image               String?                      @db.VarChar(500)
+  mon_sat_first_timings      String?                      @db.VarChar(255)
+  mon_sat_second_timings     String?                      @db.VarChar(255)
+  sunday_timings             String?                      @db.VarChar(255)
+  time_interval              String?                      @db.VarChar(100)
+  location_map               String?                      @db.Text
+  doctor_description         String?                      @db.Text
+  ai_content_generator       Boolean                      @default(false)
+  doc_info                   String?                      @db.LongText
+  schema_tags                Json?
+  latitude                   Decimal?                     @db.Decimal(10, 8)
+  longitude                  Decimal?                     @db.Decimal(11, 8)
+  status                     doctors_status               @default(active)
+  created_at                 DateTime                     @default(now()) @db.Timestamp(0)
+  updated_at                 DateTime                     @default(now()) @db.Timestamp(0)
+  doctor_awards              doctor_awards[]
+  doctor_faqs                doctor_faqs[]
+  doctor_hospitals           doctor_hospitals[]
+  doctor_speciality_mappings doctor_speciality_mappings[]
+  cities                     cities                       @relation(fields: [city_id], references: [id], map: "fk_doctors_city")
+  languages                  languages                    @relation(fields: [language_id], references: [id], map: "fk_doctors_language")
+  locations                  locations?                   @relation(fields: [location_id], references: [id], onDelete: Restrict, map: "fk_doctors_location")
+  testimonials               testimonials[]
+
+  @@index([city_id], map: "idx_doctors_city_id")
+  @@index([language_id], map: "idx_doctors_language_id")
+  @@index([location_id], map: "idx_doctors_location_id")
+  @@index([sorting_order], map: "idx_doctors_sorting_order")
+  @@index([status], map: "idx_doctors_status")
+}
+
+model events_calendar {
+  id             Int                    @id @default(autoincrement()) @db.UnsignedInt
+  event_name     String                 @db.VarChar(255)
+  event_location String?                @db.VarChar(255)
+  event_date     DateTime               @db.Date
+  event_time     DateTime?              @db.Time(0)
+  status         events_calendar_status @default(active)
+  created_at     DateTime               @default(now()) @db.Timestamp(0)
+  updated_at     DateTime               @default(now()) @db.Timestamp(0)
+
+  @@index([event_date], map: "idx_events_calendar_date")
+  @@index([status], map: "idx_events_calendar_status")
+}
+
+model feedback_leads {
+  id                Int       @id @default(autoincrement()) @db.UnsignedInt
+  name              String    @db.VarChar(150)
+  email             String    @db.VarChar(255)
+  phone_number      String    @db.VarChar(30)
+  hospital_location String?   @db.VarChar(255)
+  created_at        DateTime  @default(now()) @db.Timestamp(0)
+  updated_at        DateTime  @default(now()) @db.Timestamp(0)
+  deleted_at        DateTime? @db.Timestamp(0)
+
+  @@index([created_at], map: "idx_feedback_leads_created_at")
+  @@index([email], map: "idx_feedback_leads_email")
+}
+
+model gallery {
+  id               Int                    @id @default(autoincrement()) @db.UnsignedInt
+  // Nullable — gallery remains a standalone global entity for every
+  // existing/other use; a hospital-linked row is simply one whose
+  // hospital_id is set. No second gallery table, per the locked
+  // decision to extend the existing entity rather than duplicate it.
+  hospital_id      Int?                   @db.UnsignedInt
+  gallery_name     String                 @db.VarChar(255)
+  meta_title       String?                @db.VarChar(255)
+  meta_keyword     String?                @db.VarChar(500)
+  meta_description String?                @db.Text
+  gallery_type     gallery_gallery_type
+  gallery_status   gallery_gallery_status @default(active)
+  seo_url          String                 @unique(map: "uq_gallery_seo_url") @db.VarChar(255)
+  source           String?                @db.VarChar(1000)
+  sorting_order    Int                    @default(0)
+  created_at       DateTime               @default(now()) @db.Timestamp(0)
+  updated_at       DateTime               @default(now()) @db.Timestamp(0)
+  hospitals        hospitals?             @relation(fields: [hospital_id], references: [id], onDelete: Restrict, map: "fk_gallery_hospital")
+
+  @@index([gallery_status], map: "idx_gallery_status")
+  @@index([gallery_type], map: "idx_gallery_type")
+  @@index([hospital_id], map: "idx_gallery_hospital_id")
+  @@index([sorting_order], map: "idx_gallery_sorting_order")
+}
+
+model general_faqs {
+  id         Int                 @id @default(autoincrement()) @db.UnsignedInt
+  question   String              @db.Text
+  answer     String              @db.LongText
+  status     general_faqs_status @default(active)
+  created_at DateTime            @default(now()) @db.Timestamp(0)
+  updated_at DateTime            @default(now()) @db.Timestamp(0)
+
+  @@index([status], map: "idx_general_faqs_status")
+}
+
+/**
+ * City-independent "global" content for a treatment concept — e.g.
+ * "Hernia Surgery" in general, shown at the city-less `/dcg/{seoUrl}` route.
+ * Deliberately NOT derived from, copied from, or linked to any single
+ * city `treatments` row — it is independently authored in its own CMS
+ * module. A city's own `treatments` row may optionally point back at one
+ * of these via `treatments.global_treatment_id` (nullable — most rows
+ * start and may stay unlinked), which is the ONLY relationship between
+ * the two; no field value ever flows between them.
+ */
+model global_treatments {
+  id                                      Int                                       @id @default(autoincrement()) @db.UnsignedInt
+  treatment_name                          String                                    @db.VarChar(255)
+  treatment_title                         String?                                   @db.VarChar(255)
+  seo_url                                 String                                    @unique(map: "uq_global_treatments_seo_url") @db.VarChar(255)
+  short_description                       String?                                   @db.Text
+  description                             String?                                   @db.LongText
+  image                                   String?                                   @db.VarChar(500)
+  // Compact listing-card icon — independent of `image` (the detail-page hero). NULL = fall back to the default card icon, never to `image`.
+  card_icon                               String?                                   @db.VarChar(500)
+  meta_title                              String?                                   @db.VarChar(255)
+  meta_description                        String?                                   @db.Text
+  meta_keyword                            String?                                   @db.VarChar(500)
+  // Optional link to this global treatment's own city-independent global
+  // speciality (NOT the same as `treatments.speciality_id`, which is a
+  // CITY-scoped FK) — nullable, admin-set only, never auto-matched. When
+  // set, this treatment's canonical public URL becomes
+  // `/dcg/{global_specialities.seo_url}/{seo_url}` instead of
+  // `/dcg/{seo_url}`. See lib/public/urls.ts's getGlobalTreatmentUrl().
+  global_speciality_id                    Int?                                      @db.UnsignedInt
+  status                                  global_treatments_status                  @default(active)
+  created_at                              DateTime                                  @default(now()) @db.Timestamp(0)
+  updated_at                              DateTime                                  @default(now()) @db.Timestamp(0)
+  global_treatment_sections               global_treatment_sections[]
+  global_treatment_faqs                   global_treatment_faqs[]
+  treatments                              treatments[]
+  blog_global_treatment_mappings          blog_global_treatment_mappings[]
+  blog_category_global_treatment_mappings blog_category_global_treatment_mappings[]
+  global_specialities                     global_specialities?                     @relation(fields: [global_speciality_id], references: [id], onDelete: SetNull, map: "fk_global_treatments_global_speciality")
+
+  @@index([status], map: "idx_global_treatments_status")
+  @@index([global_speciality_id], map: "idx_global_treatments_global_speciality_id")
+}
+
+/**
+ * Freeform admin-authored content blocks for a `global_treatments` row — this entity has no fixed/city-bound section kinds (no hero/symptoms/doctors/hospital — those are inherently city concepts), so unlike `treatment_sections` there is no polymorphic `section_type`/`content Json?`: every row here is one ordered, titled rich-text block.
+ */
+model global_treatment_sections {
+  id                  Int                              @id @default(autoincrement()) @db.UnsignedInt
+  global_treatment_id Int                              @db.UnsignedInt
+  title               String                           @db.VarChar(255)
+  content             String?                          @db.LongText
+  image               String?                          @db.VarChar(500)
+  section_order       Int                              @default(0)
+  status              global_treatment_sections_status @default(active)
+  created_at          DateTime                         @default(now()) @db.Timestamp(0)
+  updated_at          DateTime                         @default(now()) @db.Timestamp(0)
+  global_treatments   global_treatments                @relation(fields: [global_treatment_id], references: [id], onDelete: Cascade, map: "fk_global_treatment_sections_treatment")
+
+  @@index([global_treatment_id], map: "idx_global_treatment_sections_treatment_id")
+  @@index([status], map: "idx_global_treatment_sections_status")
+  @@index([section_order], map: "idx_global_treatment_sections_sorting_order")
+}
+
+model global_treatment_faqs {
+  id                  Int                          @id @default(autoincrement()) @db.UnsignedInt
+  global_treatment_id Int                          @db.UnsignedInt
+  title               String                       @db.VarChar(255)
+  text                String                       @db.Text
+  status              global_treatment_faqs_status @default(active)
+  created_at          DateTime                     @default(now()) @db.Timestamp(0)
+  updated_at          DateTime                     @default(now()) @db.Timestamp(0)
+  global_treatments   global_treatments            @relation(fields: [global_treatment_id], references: [id], onDelete: Cascade, map: "fk_global_treatment_faqs_treatment")
+
+  @@index([global_treatment_id], map: "idx_global_treatment_faqs_treatment_id")
+  @@index([status], map: "idx_global_treatment_faqs_status")
+}
+
+/**
+ * Speciality's own global/city-independent equivalent — same architecture and the same non-negotiable rule as `global_treatments`: never derived from a city `specialities` row.
+ */
+model global_specialities {
+  id                                       Int                                        @id @default(autoincrement()) @db.UnsignedInt
+  speciality_name                          String                                     @db.VarChar(255)
+  speciality_title                         String?                                    @db.VarChar(255)
+  seo_url                                  String                                     @unique(map: "uq_global_specialities_seo_url") @db.VarChar(255)
+  short_description                        String?                                    @db.Text
+  description                              String?                                    @db.LongText
+  image                                    String?                                    @db.VarChar(500)
+  // Compact listing-card icon - independent of `image` (the detail-page hero). NULL = default card icon, never the hero.
+  card_icon                                String?                                    @db.VarChar(500)
+  meta_title                               String?                                    @db.VarChar(255)
+  meta_description                         String?                                    @db.Text
+  meta_keyword                             String?                                    @db.VarChar(500)
+  status                                   global_specialities_status                 @default(active)
+  created_at                               DateTime                                   @default(now()) @db.Timestamp(0)
+  updated_at                               DateTime                                   @default(now()) @db.Timestamp(0)
+  global_speciality_sections               global_speciality_sections[]
+  global_speciality_faqs                   global_speciality_faqs[]
+  specialities                             specialities[]
+  blog_global_speciality_mappings          blog_global_speciality_mappings[]
+  blog_category_global_speciality_mappings blog_category_global_speciality_mappings[]
+  global_treatments                        global_treatments[]
+
+  @@index([status], map: "idx_global_specialities_status")
+}
+
+/**
+ * Many-to-many: which blogs are explicitly Related Reading for a given global speciality. The sole source of truth for that relationship — public pages never fall back to category/city/keyword matching (see lib/public/global-content.ts, lib/public/specialities.ts).
+ */
+model blog_global_speciality_mappings {
+  blog_id              Int                 @db.UnsignedInt
+  global_speciality_id Int                 @db.UnsignedInt
+  blogs                blogs               @relation(fields: [blog_id], references: [id], onDelete: Cascade, map: "fk_blog_gs_mappings_blog")
+  global_specialities  global_specialities @relation(fields: [global_speciality_id], references: [id], onDelete: Cascade, map: "fk_blog_gs_mappings_speciality")
+
+  @@id([blog_id, global_speciality_id])
+  @@index([global_speciality_id], map: "idx_blog_gs_mappings_speciality_id")
+}
+
+/**
+ * Many-to-many: which blogs are explicitly Related Reading for a given global treatment. Mirrors blog_global_speciality_mappings exactly — see that model's own doc comment.
+ */
+model blog_global_treatment_mappings {
+  blog_id             Int               @db.UnsignedInt
+  global_treatment_id Int               @db.UnsignedInt
+  blogs               blogs             @relation(fields: [blog_id], references: [id], onDelete: Cascade, map: "fk_blog_gt_mappings_blog")
+  global_treatments   global_treatments @relation(fields: [global_treatment_id], references: [id], onDelete: Cascade, map: "fk_blog_gt_mappings_treatment")
+
+  @@id([blog_id, global_treatment_id])
+  @@index([global_treatment_id], map: "idx_blog_gt_mappings_treatment_id")
+}
+
+model global_speciality_sections {
+  id                   Int                               @id @default(autoincrement()) @db.UnsignedInt
+  global_speciality_id Int                               @db.UnsignedInt
+  title                String                            @db.VarChar(255)
+  content              String?                           @db.LongText
+  image                String?                           @db.VarChar(500)
+  section_order        Int                               @default(0)
+  status               global_speciality_sections_status @default(active)
+  created_at           DateTime                          @default(now()) @db.Timestamp(0)
+  updated_at           DateTime                          @default(now()) @db.Timestamp(0)
+  global_specialities  global_specialities               @relation(fields: [global_speciality_id], references: [id], onDelete: Cascade, map: "fk_global_speciality_sections_speciality")
+
+  @@index([global_speciality_id], map: "idx_global_speciality_sections_speciality_id")
+  @@index([status], map: "idx_global_speciality_sections_status")
+  @@index([section_order], map: "idx_global_speciality_sections_sorting_order")
+}
+
+model global_speciality_faqs {
+  id                   Int                           @id @default(autoincrement()) @db.UnsignedInt
+  global_speciality_id Int                           @db.UnsignedInt
+  title                String                        @db.VarChar(255)
+  text                 String                        @db.Text
+  status               global_speciality_faqs_status @default(active)
+  created_at           DateTime                      @default(now()) @db.Timestamp(0)
+  updated_at           DateTime                      @default(now()) @db.Timestamp(0)
+  global_specialities  global_specialities           @relation(fields: [global_speciality_id], references: [id], onDelete: Cascade, map: "fk_global_speciality_faqs_speciality")
+
+  @@index([global_speciality_id], map: "idx_global_speciality_faqs_speciality_id")
+  @@index([status], map: "idx_global_speciality_faqs_status")
+}
+
+model google_reviews {
+  id              Int                   @id @default(autoincrement()) @db.UnsignedInt
+  google_location String                @db.VarChar(255)
+  google_rating   Decimal?              @db.Decimal(2, 1)
+  google_review   String                @db.Text
+  status          google_reviews_status @default(active)
+  created_at      DateTime              @default(now()) @db.Timestamp(0)
+  updated_at      DateTime              @default(now()) @db.Timestamp(0)
+
+  @@index([google_location], map: "idx_google_reviews_location")
+  @@index([google_rating], map: "idx_google_reviews_rating")
+  @@index([status], map: "idx_google_reviews_status")
+}
+
+model healthcheck_packs {
+  id                 Int                      @id @default(autoincrement()) @db.UnsignedInt
+  package_title      String                   @db.VarChar(255)
+  meta_title         String?                  @db.VarChar(255)
+  meta_description   String?                  @db.Text
+  meta_keywords      String?                  @db.VarChar(500)
+  seo_url            String                   @unique(map: "uq_healthcheck_packs_seo_url") @db.VarChar(255)
+  cost               Decimal                  @default(0.00) @db.Decimal(10, 2)
+  pack_image         String?                  @db.VarChar(500)
+  package_file       String?                  @db.VarChar(500)
+  package_inclusions String?                  @db.LongText
+  status             healthcheck_packs_status @default(active)
+  created_at         DateTime                 @default(now()) @db.Timestamp(0)
+  updated_at         DateTime                 @default(now()) @db.Timestamp(0)
+
+  @@index([status], map: "idx_healthcheck_packs_status")
+}
+
+model hospital_faqs {
+  id          Int                  @id @default(autoincrement()) @db.UnsignedInt
+  hospital_id Int                  @db.UnsignedInt
+  title       String               @db.VarChar(255)
+  text        String               @db.Text
+  status      hospital_faqs_status @default(active)
+  created_at  DateTime             @default(now()) @db.Timestamp(0)
+  updated_at  DateTime             @default(now()) @db.Timestamp(0)
+  hospitals   hospitals            @relation(fields: [hospital_id], references: [id], onDelete: Cascade, map: "fk_hospital_faqs_hospital")
+
+  @@index([hospital_id], map: "idx_hospital_faqs_hospital_id")
+  @@index([status], map: "idx_hospital_faqs_status")
+}
+
+model hospitals {
+  id                           Int                            @id @default(autoincrement()) @db.UnsignedInt
+  hospital_name                String                         @db.VarChar(255)
+  city_id                      Int                            @db.UnsignedInt
+  location_id                  Int?                           @db.UnsignedInt
+  meta_title                   String?                        @db.VarChar(255)
+  meta_description             String?                        @db.Text
+  meta_keywords                String?                        @db.VarChar(500)
+  seo_url                      String                         @unique(map: "uq_hospitals_seo_url") @db.VarChar(255)
+  phone_number                 String?                        @db.VarChar(50)
+  timings                      String?                        @db.VarChar(255)
+  address                      String?                        @db.Text
+  hospital_image               String?                        @db.VarChar(500)
+  google_reviews               Decimal?                       @db.Decimal(3, 1)
+  patient_satisfaction_score   Decimal?                       @db.Decimal(5, 2)
+  location_360_view            String?                        @db.VarChar(1000)
+  location_map                 String?                        @db.Text
+  hospital_description         String?                        @db.Text
+  long_description             String?                        @db.LongText
+  hospital_gallery             Json?
+  status                       hospitals_status               @default(active)
+  created_at                   DateTime                       @default(now()) @db.Timestamp(0)
+  updated_at                   DateTime                       @default(now()) @db.Timestamp(0)
+  doctor_hospitals             doctor_hospitals[]
+  hospital_faqs                hospital_faqs[]
+  cities                       cities                         @relation(fields: [city_id], references: [id], map: "fk_hospitals_city")
+  locations                    locations?                     @relation(fields: [location_id], references: [id], onDelete: Restrict, map: "fk_hospitals_location")
+  specialities                 specialities[]
+  testimonials                 testimonials[]
+  treatments                   treatments[]
+  gallery                      gallery[]
+  hospital_sections            hospital_sections[]
+  hospital_insurance_companies hospital_insurance_companies[]
+
+  @@index([city_id], map: "idx_hospitals_city_id")
+  @@index([location_id], map: "idx_hospitals_location_id")
+  @@index([status], map: "idx_hospitals_status")
+}
+
+/**
+ * Hospital-side mirror of `treatment_sections`/`speciality_sections` —
+ * same exact architecture (one JSON `content` column shared by every
+ * content-bearing type, `section_type` as a controlled enum, no DB-level
+ * uniqueness on (hospital_id, section_type) so unlimited `custom` rows
+ * are allowed, application-layer guarantee of exactly one row per fixed
+ * type via getOrCreateHospitalSections()).
+ * Deliberately a SMALLER fixed-type set than Treatment/Speciality:
+ * Hospital's locked public UI has no dedicated Highlights/Symptoms/
+ * Options/Process/etc. sections to back. `hero`/`overview`/`disclaimer`
+ * have no configurable `content` at all (same as Treatment's own
+ * `hero`/`overview`/`symptoms`/`doctors`/`hospital`/`faqs` types) — they
+ * exist here purely so an admin can toggle them active/inactive; their
+ * actual text always comes from `hospitals`' own core columns (name,
+ * address, hospital_description) or, for `disclaimer`, fixed interface
+ * copy, never a second copy of that content. Only `why_choose_us` and
+ * `cta` carry real structured content, and `custom` is open-ended.
+ * Gallery/Specialities/Treatments/Doctors/Reviews/FAQs/Insurance each
+ * stay owned by their own proper relational table — never duplicated
+ * into this table's `content` JSON.
+ */
+model hospital_sections {
+  id            Int                            @id @default(autoincrement()) @db.UnsignedInt
+  hospital_id   Int                            @db.UnsignedInt
+  section_type  hospital_sections_section_type
+  section_order Int                            @default(0)
+  status        hospital_sections_status       @default(active)
+  content       Json?
+  created_at    DateTime                       @default(now()) @db.Timestamp(0)
+  updated_at    DateTime                       @default(now()) @db.Timestamp(0)
+  hospitals     hospitals                      @relation(fields: [hospital_id], references: [id], onDelete: Cascade, map: "fk_hospital_sections_hospital")
+
+  @@index([hospital_id], map: "idx_hospital_sections_hospital_id")
+  @@index([section_order], map: "idx_hospital_sections_section_order")
+  @@index([status], map: "idx_hospital_sections_status")
+}
+
+enum hospital_sections_section_type {
+  hero
+  overview
+  why_choose_us
+  cta
+  disclaimer
+  custom
+}
+
+enum hospital_sections_status {
+  active
+  inactive
+}
+
+/**
+ * Nationwide insurance-provider taxonomy — same shape/role as
+ * `doctor_specialities` relative to `doctors` (a shared, reusable
+ * entity many hospitals independently reference), not a per-hospital
+ * free-text field. `name`/`seo_url` both unique so the same provider is
+ * never duplicated under a different row.
+ */
+model insurance_companies {
+  id                           Int                            @id @default(autoincrement()) @db.UnsignedInt
+  name                         String                         @unique(map: "uq_insurance_companies_name") @db.VarChar(255)
+  seo_url                      String                         @unique(map: "uq_insurance_companies_seo_url") @db.VarChar(255)
+  logo                         String?                        @db.VarChar(500)
+  description                  String?                        @db.Text
+  status                       insurance_companies_status     @default(active)
+  created_at                   DateTime                       @default(now()) @db.Timestamp(0)
+  updated_at                   DateTime                       @default(now()) @db.Timestamp(0)
+  hospital_insurance_companies hospital_insurance_companies[]
+
+  @@index([status], map: "idx_insurance_companies_status")
+}
+
+enum insurance_companies_status {
+  active
+  inactive
+}
+
+/**
+ * Hospital ↔ Insurance Company junction — mirrors `doctor_hospitals`'
+ * composite-relationship shape conceptually, but keeps its own surrogate
+ * `id` (rather than a composite PK) specifically so `sorting_order` and
+ * `status` can live on the mapping row itself (a composite-PK junction
+ * table has no natural place to hang per-row mutable state). The
+ * `@@unique([hospital_id, insurance_company_id])` constraint is what
+ * actually prevents a duplicate mapping — never relied on the admin UI
+ * alone to enforce that.
+ */
+model hospital_insurance_companies {
+  id                   Int                                 @id @default(autoincrement()) @db.UnsignedInt
+  hospital_id          Int                                 @db.UnsignedInt
+  insurance_company_id Int                                 @db.UnsignedInt
+  sorting_order        Int                                 @default(0)
+  status               hospital_insurance_companies_status @default(active)
+  created_at           DateTime                            @default(now()) @db.Timestamp(0)
+  updated_at           DateTime                            @default(now()) @db.Timestamp(0)
+  hospitals            hospitals                           @relation(fields: [hospital_id], references: [id], onDelete: Cascade, map: "fk_hospital_insurance_companies_hospital")
+  insurance_companies  insurance_companies                 @relation(fields: [insurance_company_id], references: [id], onDelete: Cascade, map: "fk_hospital_insurance_companies_insurance_company")
+
+  @@unique([hospital_id, insurance_company_id], map: "uq_hospital_insurance_companies_mapping")
+  @@index([insurance_company_id], map: "idx_hospital_insurance_companies_insurance_company_id")
+  @@index([sorting_order], map: "idx_hospital_insurance_companies_sorting_order")
+  @@index([status], map: "idx_hospital_insurance_companies_status")
+}
+
+enum hospital_insurance_companies_status {
+  active
+  inactive
+}
+
+model international_patient_leads {
+  id         Int       @id @default(autoincrement()) @db.UnsignedInt
+  name       String    @db.VarChar(150)
+  age        Int?      @db.UnsignedInt
+  gender     String?   @db.VarChar(50)
+  country    String?   @db.VarChar(100)
+  created_at DateTime  @default(now()) @db.Timestamp(0)
+  updated_at DateTime  @default(now()) @db.Timestamp(0)
+  deleted_at DateTime? @db.Timestamp(0)
+
+  @@index([country], map: "idx_international_patient_leads_country")
+  @@index([created_at], map: "idx_international_patient_leads_created_at")
+}
+
+model js_configurations {
+  id          Int                          @id @default(autoincrement()) @db.UnsignedInt
+  config_for  js_configurations_config_for
+  config_type String                       @db.VarChar(100)
+  config_code String                       @db.LongText
+  status      js_configurations_status     @default(active)
+  created_at  DateTime                     @default(now()) @db.Timestamp(0)
+  updated_at  DateTime                     @default(now()) @db.Timestamp(0)
+
+  @@index([config_for], map: "idx_js_configurations_config_for")
+  @@index([status], map: "idx_js_configurations_status")
+}
+
+/// Provider-agnostic AI configuration — the admin can save several
+/// provider configs but only one may be `is_active` at a time (enforced in
+/// services/ai-configuration.service.ts's activateAIConfiguration, not at
+/// the DB level, matching how other cross-row invariants like the menu
+/// parent-cycle check are enforced in the service layer). `status` is the
+/// standard soft-delete flag; `is_active` is a separate concept — "is this
+/// the one currently live provider" — deliberately not collapsed into
+/// `status`. `encrypted_api_key` is an AES-256-GCM envelope
+/// (lib/ai/encryption.ts), never the plaintext key; nullable because a row
+/// can exist before a key has been entered.
+model ai_configurations {
+  id                Int                        @id @default(autoincrement()) @db.UnsignedInt
+  provider          ai_configurations_provider
+  base_url          String                     @db.VarChar(500)
+  model             String                     @db.VarChar(255)
+  encrypted_api_key String?                    @db.Text
+  is_active         Boolean                    @default(false)
+  status            ai_configurations_status   @default(active)
+  created_at        DateTime                   @default(now()) @db.Timestamp(0)
+  updated_at        DateTime                   @default(now()) @db.Timestamp(0)
+
+  @@index([provider], map: "idx_ai_configurations_provider")
+  @@index([is_active], map: "idx_ai_configurations_is_active")
+}
+
+/// Single-row table (service always upserts id=1) holding the public
+/// website's admin-editable design tokens as one JSON map — the same
+/// "flexible content as Json" convention already used by
+/// treatment_sections.content/speciality_sections.content rather than one
+/// rigid column per color. Separate from js_configurations/
+/// ai_configurations: neither is a generic settings table, and this has no
+/// create/delete semantics (view + update only).
+model website_theme_settings {
+  id         Int      @id @default(autoincrement()) @db.UnsignedInt
+  tokens     Json
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  updated_at DateTime @default(now()) @db.Timestamp(0)
+}
+
+/// Single-row table (service always upserts id=1) holding the two
+/// admin-editable marketing strings shown on the shared public
+/// AppointmentLeadForm. Explicit columns (not a Json blob like
+/// website_theme_settings above) since this is exactly two fixed,
+/// independently-typed fields with no variable shape — matches
+/// ai_configurations' explicit-column convention rather than the
+/// flexible-content Json pattern, which is for genuinely structured/
+/// variable content.
+model consultation_form_settings {
+  id               Int      @id @default(autoincrement()) @db.UnsignedInt
+  form_title       String   @db.VarChar(255)
+  form_description String   @db.VarChar(500)
+  submit_label     String?  @db.VarChar(100)
+  privacy_message  String?  @db.VarChar(500)
+  // Field definitions, popular-city buttons etc. NULL = use the built-in default form. Validated by validators/consultation-form-settings.validator.ts on every write and re-validated on every read.
+  fields_config    Json?
+  created_at       DateTime @default(now()) @db.Timestamp(0)
+  updated_at       DateTime @default(now()) @db.Timestamp(0)
+}
+
+model languages {
+  id                  Int                   @id @default(autoincrement()) @db.UnsignedInt
+  name                String                @db.VarChar(100)
+  seo_url             String                @unique(map: "uq_languages_seo_url") @db.VarChar(255)
+  status              languages_status      @default(active)
+  created_at          DateTime              @default(now()) @db.Timestamp(0)
+  updated_at          DateTime              @default(now()) @db.Timestamp(0)
+  blogs               blogs[]
+  cities              cities[]
+  doctor_specialities doctor_specialities[]
+  doctors             doctors[]
+  menus               menus[]
+  pages               pages[]
+  testimonials        testimonials[]
+  treatments          treatments[]
+}
+
+model locations {
+  id               Int              @id @default(autoincrement()) @db.UnsignedInt
+  city_id          Int              @db.UnsignedInt
+  area             String           @db.VarChar(150)
+  zipcode          String           @db.VarChar(20)
+  meta_title       String?          @db.VarChar(255)
+  meta_description String?          @db.Text
+  meta_keywords    String?          @db.VarChar(500)
+  seo_url          String           @unique(map: "uq_locations_seo_url") @db.VarChar(255)
+  status           locations_status @default(active)
+  created_at       DateTime         @default(now()) @db.Timestamp(0)
+  updated_at       DateTime         @default(now()) @db.Timestamp(0)
+  doctor_pages     doctor_pages[]
+  doctors          doctors[]
+  hospitals        hospitals[]
+  cities           cities           @relation(fields: [city_id], references: [id], map: "fk_locations_city")
+  pages            pages[]
+  specialities     specialities[]
+  testimonials     testimonials[]
+  treatments       treatments[]
+
+  @@index([city_id], map: "idx_locations_city_id")
+}
+
+model menus {
+  id            Int                @id @default(autoincrement()) @db.UnsignedInt
+  language_id   Int                @db.UnsignedInt
+  title         String             @db.VarChar(255)
+  seo_url       String             @unique(map: "uq_menus_seo_url") @db.VarChar(255)
+  sorting_order Int                @default(0)
+  city_id       Int?               @db.UnsignedInt
+  parent_id     Int?               @db.UnsignedInt
+  target_type   menus_target_type  @default(none)
+  target_id     Int?               @db.UnsignedInt
+  listing_key   menus_listing_key?
+  placement     menus_placement    @default(primary)
+  status        menus_status       @default(active)
+  created_at    DateTime           @default(now()) @db.Timestamp(0)
+  updated_at    DateTime           @default(now()) @db.Timestamp(0)
+  cities        cities?            @relation(fields: [city_id], references: [id], map: "fk_menus_city")
+  languages     languages          @relation(fields: [language_id], references: [id], map: "fk_menus_language")
+  menus         menus?             @relation("menusTomenus", fields: [parent_id], references: [id], onDelete: Restrict, map: "fk_menus_parent")
+  other_menus   menus[]            @relation("menusTomenus")
+
+  @@index([city_id], map: "idx_menus_city_id")
+  @@index([language_id], map: "idx_menus_language_id")
+  @@index([placement], map: "idx_menus_placement")
+  @@index([parent_id], map: "idx_menus_parent_id")
+  @@index([sorting_order], map: "idx_menus_sorting_order")
+  @@index([status], map: "idx_menus_status")
+  @@index([target_type, target_id], map: "idx_menus_target")
+}
+
+model news_media {
+  id         Int               @id @default(autoincrement()) @db.UnsignedInt
+  title      String            @db.VarChar(255)
+  location   String?           @db.VarChar(255)
+  date       DateTime?         @db.DateTime(0)
+  view_image String?           @db.VarChar(500)
+  view_link  String?           @db.VarChar(500)
+  status     news_media_status @default(active)
+  created_at DateTime          @default(now()) @db.Timestamp(0)
+  updated_at DateTime          @default(now()) @db.Timestamp(0)
+
+  @@index([date], map: "idx_news_media_date")
+  @@index([status], map: "idx_news_media_status")
+}
+
+model ovulation_calculator {
+  id            Int      @id @default(autoincrement()) @db.UnsignedInt
+  name          String   @db.VarChar(150)
+  email         String?  @db.VarChar(255)
+  mobile_number String?  @db.VarChar(30)
+  created_at    DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([created_at], map: "idx_ovulation_calculator_created_at")
+  @@index([email], map: "idx_ovulation_calculator_email")
+  @@index([mobile_number], map: "idx_ovulation_calculator_mobile")
+  @@index([name], map: "idx_ovulation_calculator_name")
+}
+
+model pages {
+  id               Int             @id @default(autoincrement()) @db.UnsignedInt
+  language_id      Int             @db.UnsignedInt
+  title            String          @db.VarChar(255)
+  seo_url          String          @unique(map: "uq_pages_seo_url") @db.VarChar(255)
+  meta_title       String?         @db.VarChar(255)
+  meta_description String?         @db.Text
+  meta_keyword     String?         @db.VarChar(500)
+  category         String          @db.VarChar(100)
+  // Where this page's link appears in the public footer: the Company column, the bottom legal bar, or nowhere. Replaces the old slug-keyword guess.
+  footer_placement pages_footer_placement @default(company)
+  // NULL = a GLOBAL page (city-independent) - the same convention `menus.city_id` uses. A city-specific page always has a real city.
+  city_id          Int?            @db.UnsignedInt
+  location_id      Int?            @db.UnsignedInt
+  // Legacy single rich-text field — kept for backward compatibility.
+  // New pages should use `page_sections` instead; the public renderer
+  // prefers active sections and only falls back to `body` when a page
+  // has none.
+  body             String?         @db.LongText
+  status           pages_status    @default(active)
+  created_at       DateTime        @default(now()) @db.Timestamp(0)
+  updated_at       DateTime        @default(now()) @db.Timestamp(0)
+  // Restrict (not SetNull): deleting a city must never silently turn its pages global.
+  cities           cities?         @relation(fields: [city_id], references: [id], onDelete: Restrict, map: "fk_pages_city")
+  languages        languages       @relation(fields: [language_id], references: [id], map: "fk_pages_language")
+  locations        locations?      @relation(fields: [location_id], references: [id], onDelete: Restrict, map: "fk_pages_location")
+  page_sections    page_sections[]
+
+  @@index([category], map: "idx_pages_category")
+  @@index([city_id], map: "idx_pages_city_id")
+  @@index([language_id], map: "idx_pages_language_id")
+  @@index([location_id], map: "idx_pages_location_id")
+  @@index([status], map: "idx_pages_status")
+}
+
+/**
+ * A structured, reorderable, controlled content block belonging to one
+ * `pages` row. `content` holds the section-type-specific fields as JSON
+ * (validated per-type at the application layer, in
+ * validators/page-section.validator.ts) rather than dozens of nullable
+ * columns on this table — the set of section types is small and fixed
+ * (hero/about/features/content/cta), so a single typed JSON column is
+ * simpler than one column per possible field across every type.
+ */
+model page_sections {
+  id            Int                        @id @default(autoincrement()) @db.UnsignedInt
+  page_id       Int                        @db.UnsignedInt
+  section_type  page_sections_section_type
+  section_order Int                        @default(0)
+  status        page_sections_status       @default(active)
+  content       Json
+  created_at    DateTime                   @default(now()) @db.Timestamp(0)
+  updated_at    DateTime                   @default(now()) @db.Timestamp(0)
+  pages         pages                      @relation(fields: [page_id], references: [id], onDelete: Cascade, map: "fk_page_sections_page")
+
+  @@index([page_id], map: "idx_page_sections_page_id")
+  @@index([section_order], map: "idx_page_sections_section_order")
+  @@index([status], map: "idx_page_sections_status")
+}
+
+model specialities {
+  id                   Int                   @id @default(autoincrement()) @db.UnsignedInt
+  speciality_name      String                @db.VarChar(255)
+  speciality_title     String?               @db.VarChar(255)
+  seo_url              String                @unique(map: "uq_specialities_seo_url") @db.VarChar(255)
+  meta_title           String?               @db.VarChar(255)
+  meta_description     String?               @db.Text
+  meta_keyword         String?               @db.VarChar(500)
+  city_id              Int                   @db.UnsignedInt
+  location_id          Int?                  @db.UnsignedInt
+  hospital_id          Int?                  @db.UnsignedInt
+  speciality_logo      String?               @db.VarChar(500)
+  // Compact listing-card icon - independent of `speciality_logo` (the detail-page hero). NULL = default card icon, never the hero.
+  card_icon            String?               @db.VarChar(500)
+  short_description    String?               @db.Text
+  parent_speciality_id Int?                  @db.UnsignedInt
+  keywords_for_doctors String?               @db.VarChar(500)
+  status               specialities_status   @default(active)
+  ai_content_generator Boolean               @default(false)
+  description          String?               @db.LongText
+  // Optional link from this clinical speciality to the nationwide doctor
+  // taxonomy (e.g. "Proctology" here -> "Proctologist" there) — the ONLY
+  // relationship connecting specialities to doctors at all; nullable and
+  // SetNull-on-delete since a speciality is fully valid with no doctors
+  // section configured. Many specialities rows (one per city) can point at
+  // the same doctor_specialities row, since that side is nationwide.
+  doctor_speciality_id Int?                  @db.UnsignedInt
+  // Optional link to this speciality's city-independent "global" concept
+  // (see `global_specialities`'s own doc comment) — nullable, admin-set
+  // only, never auto-matched/backfilled. Purely a discovery pointer: no
+  // content ever flows from this row to the global one or back.
+  global_speciality_id Int?                  @db.UnsignedInt
+  created_at           DateTime              @default(now()) @db.Timestamp(0)
+  updated_at           DateTime              @default(now()) @db.Timestamp(0)
+  doctor_pages         doctor_pages[]
+  cities               cities                @relation(fields: [city_id], references: [id], map: "fk_specialities_city")
+  hospitals            hospitals?            @relation(fields: [hospital_id], references: [id], onDelete: Restrict, map: "fk_specialities_hospital")
+  locations            locations?            @relation(fields: [location_id], references: [id], onDelete: Restrict, map: "fk_specialities_location")
+  specialities         specialities?         @relation("specialitiesTospecialities", fields: [parent_speciality_id], references: [id], onDelete: Restrict, map: "fk_specialities_parent")
+  other_specialities   specialities[]        @relation("specialitiesTospecialities")
+  doctor_specialities  doctor_specialities?  @relation(fields: [doctor_speciality_id], references: [id], onDelete: SetNull, map: "fk_specialities_doctor_speciality")
+  global_specialities  global_specialities?  @relation(fields: [global_speciality_id], references: [id], onDelete: SetNull, map: "fk_specialities_global_speciality")
+  speciality_faqs      speciality_faqs[]
+  speciality_symptoms  speciality_symptoms[]
+  treatments           treatments[]
+  speciality_sections  speciality_sections[]
+  // Back-relation for testimonials.speciality_id (transition phase — see
+  // the patient_specialities/patient_treatments removal plan).
+  testimonials         testimonials[]
+
+  @@index([city_id], map: "idx_specialities_city_id")
+  @@index([hospital_id], map: "idx_specialities_hospital_id")
+  @@index([location_id], map: "idx_specialities_location_id")
+  @@index([parent_speciality_id], map: "idx_specialities_parent_id")
+  @@index([status], map: "idx_specialities_status")
+  @@index([doctor_speciality_id], map: "idx_specialities_doctor_speciality_id")
+  @@index([global_speciality_id], map: "idx_specialities_global_speciality_id")
+}
+
+model speciality_faqs {
+  id            Int                    @id @default(autoincrement()) @db.UnsignedInt
+  speciality_id Int                    @db.UnsignedInt
+  title         String                 @db.VarChar(255)
+  text          String                 @db.Text
+  status        speciality_faqs_status @default(active)
+  created_at    DateTime               @default(now()) @db.Timestamp(0)
+  updated_at    DateTime               @default(now()) @db.Timestamp(0)
+  specialities  specialities           @relation(fields: [speciality_id], references: [id], onDelete: Cascade, map: "fk_speciality_faqs_speciality")
+
+  @@index([speciality_id], map: "idx_speciality_faqs_speciality_id")
+  @@index([status], map: "idx_speciality_faqs_status")
+}
+
+model speciality_symptoms {
+  id            Int                        @id @default(autoincrement()) @db.UnsignedInt
+  speciality_id Int                        @db.UnsignedInt
+  name          String                     @db.VarChar(255)
+  image         String?                    @db.VarChar(500)
+  sorting_order Int                        @default(0)
+  status        speciality_symptoms_status @default(active)
+  created_at    DateTime                   @default(now()) @db.Timestamp(0)
+  updated_at    DateTime                   @default(now()) @db.Timestamp(0)
+  specialities  specialities               @relation(fields: [speciality_id], references: [id], onDelete: Cascade, map: "fk_speciality_symptoms_speciality")
+
+  @@index([sorting_order], map: "idx_speciality_symptoms_sorting_order")
+  @@index([speciality_id], map: "idx_speciality_symptoms_speciality_id")
+  @@index([status], map: "idx_speciality_symptoms_status")
+}
+
+model symptom_articles {
+  id               Int                     @id @default(autoincrement()) @db.UnsignedInt
+  article_name     String                  @db.VarChar(255)
+  part_id          Int                     @db.UnsignedInt
+  symptom_id       Int                     @db.UnsignedInt
+  meta_title       String?                 @db.VarChar(255)
+  meta_description String?                 @db.Text
+  meta_keywords    String?                 @db.VarChar(500)
+  seo_url          String                  @unique(map: "uq_symptom_articles_seo_url") @db.VarChar(255)
+  description      String?                 @db.LongText
+  status           symptom_articles_status @default(active)
+  created_at       DateTime                @default(now()) @db.Timestamp(0)
+  updated_at       DateTime                @default(now()) @db.Timestamp(0)
+  symptom_parts    symptom_parts           @relation(fields: [part_id], references: [id], map: "fk_symptom_articles_part")
+  symptoms         symptoms                @relation(fields: [symptom_id], references: [id], map: "fk_symptom_articles_symptom")
+
+  @@index([part_id], map: "idx_symptom_articles_part_id")
+  @@index([status], map: "idx_symptom_articles_status")
+  @@index([symptom_id], map: "idx_symptom_articles_symptom_id")
+}
+
+model symptom_parts {
+  id               Int                  @id @default(autoincrement()) @db.UnsignedInt
+  part_name        String               @db.VarChar(255)
+  meta_title       String?              @db.VarChar(255)
+  meta_description String?              @db.Text
+  meta_keywords    String?              @db.VarChar(500)
+  seo_url          String               @unique(map: "uq_symptom_parts_seo_url") @db.VarChar(255)
+  part_description String?              @db.LongText
+  status           symptom_parts_status @default(active)
+  created_at       DateTime             @default(now()) @db.Timestamp(0)
+  updated_at       DateTime             @default(now()) @db.Timestamp(0)
+  symptom_articles symptom_articles[]
+  symptoms         symptoms[]
+
+  @@index([status], map: "idx_symptom_parts_status")
+}
+
+model symptoms {
+  id               Int                @id @default(autoincrement()) @db.UnsignedInt
+  part_id          Int                @db.UnsignedInt
+  symptom_name     String             @db.VarChar(255)
+  status           symptoms_status    @default(active)
+  created_at       DateTime           @default(now()) @db.Timestamp(0)
+  updated_at       DateTime           @default(now()) @db.Timestamp(0)
+  symptom_articles symptom_articles[]
+  symptom_parts    symptom_parts      @relation(fields: [part_id], references: [id], onDelete: Cascade, map: "fk_symptoms_part")
+
+  @@index([part_id], map: "idx_symptoms_part_id")
+  @@index([status], map: "idx_symptoms_status")
+}
+
+model testimonials {
+  id                Int                 @id @default(autoincrement()) @db.UnsignedInt
+  language_id       Int                 @db.UnsignedInt
+  testimonial_name  String              @db.VarChar(255)
+  meta_title        String?             @db.VarChar(255)
+  meta_description  String?             @db.Text
+  meta_keywords     String?             @db.VarChar(500)
+  seo_url           String              @unique(map: "uq_testimonials_seo_url") @db.VarChar(255)
+  youtube_url       String?             @db.VarChar(500)
+  city_id           Int                 @db.UnsignedInt
+  location_id       Int?                @db.UnsignedInt
+  hospital_id       Int?                @db.UnsignedInt
+  doctor_id         Int?                @db.UnsignedInt
+  // Real clinical-speciality link — points at the real `specialities` CMS
+  // table, never `doctor_specialities`. Replaces the removed
+  // patient_specialities/patient_treatments taxonomy entirely.
+  speciality_id     Int?                @db.UnsignedInt
+  publish_date      DateTime?           @db.DateTime(0)
+  testimonial_image String?             @db.VarChar(500)
+  description       String?             @db.LongText
+  status            testimonials_status @default(active)
+  created_at        DateTime            @default(now()) @db.Timestamp(0)
+  updated_at        DateTime            @default(now()) @db.Timestamp(0)
+  cities            cities              @relation(fields: [city_id], references: [id], map: "fk_testimonials_city")
+  doctors           doctors?            @relation(fields: [doctor_id], references: [id], onDelete: Restrict, map: "fk_testimonials_doctor")
+  hospitals         hospitals?          @relation(fields: [hospital_id], references: [id], onDelete: Restrict, map: "fk_testimonials_hospital")
+  languages         languages           @relation(fields: [language_id], references: [id], map: "fk_testimonials_language")
+  locations         locations?          @relation(fields: [location_id], references: [id], onDelete: Restrict, map: "fk_testimonials_location")
+  specialities      specialities?       @relation(fields: [speciality_id], references: [id], onDelete: Restrict, map: "fk_testimonials_speciality")
+
+  @@index([city_id], map: "idx_testimonials_city_id")
+  @@index([doctor_id], map: "idx_testimonials_doctor_id")
+  @@index([hospital_id], map: "idx_testimonials_hospital_id")
+  @@index([language_id], map: "idx_testimonials_language_id")
+  @@index([location_id], map: "idx_testimonials_location_id")
+  @@index([speciality_id], map: "idx_testimonials_speciality_id")
+  @@index([publish_date], map: "idx_testimonials_publish_date")
+  @@index([status], map: "idx_testimonials_status")
+}
+
+model treatment_faqs {
+  id           Int                   @id @default(autoincrement()) @db.UnsignedInt
+  treatment_id Int                   @db.UnsignedInt
+  title        String                @db.VarChar(255)
+  text         String                @db.Text
+  status       treatment_faqs_status @default(active)
+  created_at   DateTime              @default(now()) @db.Timestamp(0)
+  updated_at   DateTime              @default(now()) @db.Timestamp(0)
+  treatments   treatments            @relation(fields: [treatment_id], references: [id], onDelete: Cascade, map: "fk_treatment_faqs_treatment")
+
+  @@index([status], map: "idx_treatment_faqs_status")
+  @@index([treatment_id], map: "idx_treatment_faqs_treatment_id")
+}
+
+model treatment_symptoms {
+  id            Int                       @id @default(autoincrement()) @db.UnsignedInt
+  treatment_id  Int                       @db.UnsignedInt
+  name          String                    @db.VarChar(255)
+  image         String?                   @db.VarChar(500)
+  sorting_order Int                       @default(0)
+  status        treatment_symptoms_status @default(active)
+  created_at    DateTime                  @default(now()) @db.Timestamp(0)
+  updated_at    DateTime                  @default(now()) @db.Timestamp(0)
+  treatments    treatments                @relation(fields: [treatment_id], references: [id], onDelete: Cascade, map: "fk_treatment_symptoms_treatment")
+
+  @@index([sorting_order], map: "idx_treatment_symptoms_sorting_order")
+  @@index([status], map: "idx_treatment_symptoms_status")
+  @@index([treatment_id], map: "idx_treatment_symptoms_treatment_id")
+}
+
+model treatments {
+  id                   Int                  @id @default(autoincrement()) @db.UnsignedInt
+  speciality_id        Int                  @db.UnsignedInt
+  sub_speciality_name  String               @db.VarChar(255)
+  sub_speciality_title String?              @db.VarChar(255)
+  seo_url              String               @unique(map: "uq_treatments_seo_url") @db.VarChar(255)
+  meta_title           String?              @db.VarChar(255)
+  meta_description     String?              @db.Text
+  meta_keyword         String?              @db.VarChar(500)
+  language_id          Int                  @db.UnsignedInt
+  city_id              Int                  @db.UnsignedInt
+  location_id          Int?                 @db.UnsignedInt
+  hospital_id          Int?                 @db.UnsignedInt
+  speciality_logo      String?              @db.VarChar(500)
+  // Compact listing-card icon — independent of `speciality_logo` (the detail-page hero). NULL = default card icon, never the hero; never inherited from `global_treatments.card_icon`.
+  card_icon            String?              @db.VarChar(500)
+  short_description    String?              @db.Text
+  keywords_for_doctors String?              @db.VarChar(500)
+  status               treatments_status    @default(active)
+  ai_content_generator Boolean              @default(false)
+  description          String?              @db.LongText
+  // Optional link to this treatment's city-independent "global" concept —
+  // same nullable, admin-set-only, never-auto-matched rule as
+  // `specialities.global_speciality_id`.
+  global_treatment_id  Int?                 @db.UnsignedInt
+  created_at           DateTime             @default(now()) @db.Timestamp(0)
+  updated_at           DateTime             @default(now()) @db.Timestamp(0)
+  treatment_faqs       treatment_faqs[]
+  treatment_symptoms   treatment_symptoms[]
+  treatment_sections   treatment_sections[]
+  cities               cities               @relation(fields: [city_id], references: [id], map: "fk_treatments_city")
+  hospitals            hospitals?           @relation(fields: [hospital_id], references: [id], onDelete: Restrict, map: "fk_treatments_hospital")
+  languages            languages            @relation(fields: [language_id], references: [id], map: "fk_treatments_language")
+  locations            locations?           @relation(fields: [location_id], references: [id], onDelete: Restrict, map: "fk_treatments_location")
+  specialities         specialities         @relation(fields: [speciality_id], references: [id], map: "fk_treatments_speciality")
+  global_treatments    global_treatments?   @relation(fields: [global_treatment_id], references: [id], onDelete: SetNull, map: "fk_treatments_global_treatment")
+
+  @@index([city_id], map: "idx_treatments_city_id")
+  @@index([hospital_id], map: "idx_treatments_hospital_id")
+  @@index([language_id], map: "idx_treatments_language_id")
+  @@index([location_id], map: "idx_treatments_location_id")
+  @@index([speciality_id], map: "idx_treatments_speciality_id")
+  @@index([status], map: "idx_treatments_status")
+  @@index([global_treatment_id], map: "idx_treatments_global_treatment_id")
+}
+
+enum roles_status {
+  active
+  inactive
+}
+
+enum modules_status {
+  active
+  inactive
+}
+
+enum users_status {
+  active
+  inactive
+}
+
+enum js_configurations_config_for {
+  header
+  footer
+}
+
+enum bookaform_data_status {
+  active
+  inactive
+}
+
+enum general_faqs_status {
+  active
+  inactive
+}
+
+enum languages_status {
+  active
+  inactive
+}
+
+enum symptoms_status {
+  active
+  inactive
+}
+
+enum blog_faqs_status {
+  active
+  inactive
+}
+
+enum doctor_specialities_status {
+  active
+  inactive
+}
+
+enum global_treatments_status {
+  active
+  inactive
+}
+
+enum global_treatment_sections_status {
+  active
+  inactive
+}
+
+enum global_treatment_faqs_status {
+  active
+  inactive
+}
+
+enum global_specialities_status {
+  active
+  inactive
+}
+
+enum global_speciality_sections_status {
+  active
+  inactive
+}
+
+enum global_speciality_faqs_status {
+  active
+  inactive
+}
+
+enum google_reviews_status {
+  active
+  inactive
+}
+
+enum hospital_faqs_status {
+  active
+  inactive
+}
+
+enum js_configurations_status {
+  active
+  inactive
+}
+
+enum speciality_faqs_status {
+  active
+  inactive
+}
+
+enum treatment_faqs_status {
+  active
+  inactive
+}
+
+enum events_calendar_status {
+  active
+  inactive
+}
+
+enum gallery_gallery_type {
+  image
+  video
+}
+
+enum speciality_symptoms_status {
+  active
+  inactive
+}
+
+enum treatment_symptoms_status {
+  active
+  inactive
+}
+
+enum blog_categories_status {
+  active
+  inactive
+}
+
+enum gallery_gallery_status {
+  active
+  inactive
+}
+
+enum news_media_status {
+  active
+  inactive
+}
+
+enum banners_status {
+  active
+  inactive
+}
+
+enum cities_status {
+  active
+  inactive
+}
+
+enum menus_status {
+  active
+  inactive
+}
+
+enum menus_target_type {
+  none
+  speciality
+  treatment
+  hospital
+  doctor
+  doctor_speciality
+  blog
+  blog_category
+  page
+  listing
+  global_speciality
+}
+
+/**
+ * Controlled set of nationwide/system listing routes a `menus` row can point at when target_type is "listing" — see lib/public/urls.ts for the URL each key resolves to. Deliberately a fixed enum, not a free-text column, so the CMS can never store an arbitrary/broken URL for these routes.
+ */
+enum menus_listing_key {
+  specialities
+  treatments
+  hospitals
+  doctors
+  find_a_doctor
+  health_packages
+  blogs
+  testimonials
+  contact_us
+}
+
+/**
+ * Which row/region of the public navigation a top-level menu item (and its children) renders in. Only meaningful on a top-level row (`parent_id: null`) — a child's own placement is not read by the tree builder, since it always renders wherever its parent renders.
+ */
+enum menus_placement {
+  primary
+  secondary
+  footer
+}
+
+enum symptom_parts_status {
+  active
+  inactive
+}
+
+enum locations_status {
+  active
+  inactive
+}
+
+enum symptom_articles_status {
+  active
+  inactive
+}
+
+enum healthcheck_packs_status {
+  active
+  inactive
+}
+
+enum doctor_pages_status {
+  active
+  inactive
+}
+
+enum doctor_awards_status {
+  active
+  inactive
+}
+
+enum doctor_faqs_status {
+  active
+  inactive
+}
+
+enum pages_status {
+  active
+  inactive
+}
+
+enum pages_footer_placement {
+  company
+  legal
+  hidden
+}
+
+enum page_sections_section_type {
+  hero
+  about
+  features
+  content
+  cta
+  hospital_listing
+}
+
+enum page_sections_status {
+  active
+  inactive
+}
+
+enum blogs_blog_status {
+  active
+  inactive
+}
+
+enum specialities_status {
+  active
+  inactive
+}
+
+/**
+ * Presentation/order/enable-disable configuration for the 8 predefined
+ * Speciality Content sections, PLUS an unlimited number of admin-authored
+ * custom content sections (`section_type = "custom"`) — never a second
+ * copy of the underlying content. Hero/Overview/Treatments/Symptoms/
+ * Hospital/Doctors/FAQs all read from the EXISTING `specialities` columns
+ * and relations; `cta` and `custom` are the only two types with their own
+ * `content` JSON.
+ * There is deliberately NO `@@unique([speciality_id, section_type])`
+ * constraint (removed — previously enforced "exactly one row per type" at
+ * the DB level, which is exactly wrong for `custom`, since a speciality
+ * can have any number of custom sections). "Exactly one row per fixed
+ * type" is instead guaranteed at the application layer by
+ * services/speciality-section.service.ts: `getOrCreateSpecialitySections`
+ * only ever backfills the 8 fixed types once each, and the only section-
+ * creation endpoint (`createSpecialitySection`) always forces
+ * `section_type: "custom"` — a fixed-type row can never be created
+ * through the API. Every row's real identity is its own `id`, not
+ * `section_type` (mirrors `page_sections`' proven identical pattern for
+ * Pages, which never had this constraint either).
+ */
+model speciality_sections {
+  id            Int                              @id @default(autoincrement()) @db.UnsignedInt
+  speciality_id Int                              @db.UnsignedInt
+  section_type  speciality_sections_section_type
+  section_order Int                              @default(0)
+  status        speciality_sections_status       @default(active)
+  content       Json?
+  created_at    DateTime                         @default(now()) @db.Timestamp(0)
+  updated_at    DateTime                         @default(now()) @db.Timestamp(0)
+  specialities  specialities                     @relation(fields: [speciality_id], references: [id], onDelete: Cascade, map: "fk_speciality_sections_speciality")
+
+  @@index([speciality_id], map: "idx_speciality_sections_speciality_id")
+  @@index([section_order], map: "idx_speciality_sections_section_order")
+  @@index([status], map: "idx_speciality_sections_status")
+}
+
+/**
+ * Independent Treatment-side mirror of `speciality_sections` — same
+ * exact architecture (one JSON `content` column shared by every
+ * structured/content-bearing type, `section_type` as a controlled enum,
+ * no DB-level uniqueness on (treatment_id, section_type) so unlimited
+ * `custom` rows are allowed, application-layer guarantee of exactly one
+ * row per fixed type via getOrCreateTreatmentSections()) — deliberately
+ * NOT a shared table with `speciality_sections`: Treatment and Speciality
+ * stay fully independently managed per the locked architecture decision.
+ */
+model treatment_sections {
+  id            Int                             @id @default(autoincrement()) @db.UnsignedInt
+  treatment_id  Int                             @db.UnsignedInt
+  section_type  treatment_sections_section_type
+  section_order Int                             @default(0)
+  status        treatment_sections_status       @default(active)
+  content       Json?
+  created_at    DateTime                        @default(now()) @db.Timestamp(0)
+  updated_at    DateTime                        @default(now()) @db.Timestamp(0)
+  treatments    treatments                      @relation(fields: [treatment_id], references: [id], onDelete: Cascade, map: "fk_treatment_sections_treatment")
+
+  @@index([treatment_id], map: "idx_treatment_sections_treatment_id")
+  @@index([section_order], map: "idx_treatment_sections_section_order")
+  @@index([status], map: "idx_treatment_sections_status")
+}
+
+enum speciality_sections_section_type {
+  hero
+  overview
+  treatments
+  symptoms
+  hospital
+  faqs
+  cta
+  doctors
+  custom
+  why_choose_us
+}
+
+enum speciality_sections_status {
+  active
+  inactive
+}
+
+enum treatment_sections_section_type {
+  hero
+  highlights
+  overview
+  facts
+  symptoms
+  options
+  eligibility
+  why_choose_us
+  doctors
+  process
+  journey
+  hospital
+  preparation_recovery
+  faqs
+  cta
+  custom
+}
+
+enum treatment_sections_status {
+  active
+  inactive
+}
+
+enum treatments_status {
+  active
+  inactive
+}
+
+enum testimonials_status {
+  active
+  inactive
+}
+
+enum hospitals_status {
+  active
+  inactive
+}
+
+enum doctors_status {
+  active
+  inactive
+}
+
+enum ai_configurations_provider {
+  openrouter
+  gemini
+}
+
+enum ai_configurations_status {
+  active
+  inactive
+}
+
+/// Single-row table (service always upserts id=1) holding everything admins can edit on the public /contact-us page except the form itself (which stays in consultation_form_settings, the single source of truth for the form). contact_items is the ordered list of icon/label/value rows; validated by validators/contact-page-settings.validator.ts on every write and re-validated on every read.
+model contact_page_settings {
+  id                   Int      @id @default(autoincrement()) @db.UnsignedInt
+  badge_text           String?  @db.VarChar(100)
+  heading              String   @db.VarChar(255)
+  description          String   @db.VarChar(500)
+  show_badge           Boolean  @default(true)
+  show_contact_details Boolean  @default(true)
+  form_position        String   @default("right") @db.VarChar(10)
+  show_form_heading    Boolean  @default(false)
+  contact_items        Json?
+  meta_title           String?  @db.VarChar(255)
+  meta_description     String?  @db.Text
+  meta_keyword         String?  @db.VarChar(500)
+  created_at           DateTime @default(now()) @db.Timestamp(0)
+  updated_at           DateTime @default(now()) @db.Timestamp(0)
+}
+
+/// Single-row table (service always upserts id=1) behind Admin -> Settings -> Footer Settings: everything in the public footer except its three colours (those live in website_theme_settings / Website Appearance). `columns`, `contact_items`, `social_links` and `bottom_links` are JSON, validated by validators/footer-settings.validator.ts on every write and re-validated on every read. A missing row means "never customised" and the built-in defaults (the original footer) apply.
+model footer_settings {
+  id               Int      @id @default(autoincrement()) @db.UnsignedInt
+  brand_primary    String   @db.VarChar(100)
+  brand_accent     String?  @db.VarChar(100)
+  logo             String?  @db.VarChar(500)
+  description      String   @db.VarChar(1000)
+  cta_enabled      Boolean  @default(true)
+  cta_heading      String   @db.VarChar(255)
+  cta_description  String   @db.VarChar(500)
+  cta_button_label String   @db.VarChar(100)
+  cta_button_url   String?  @db.VarChar(500)
+  copyright_text   String   @db.VarChar(500)
+  columns          Json
+  contact_items    Json?
+  social_links     Json?
+  bottom_links     Json?
+  created_at       DateTime @default(now()) @db.Timestamp(0)
+  updated_at       DateTime @default(now()) @db.Timestamp(0)
+}
+
+// Shared sliding-window counters for lib/rate-limit.ts (login, public lead
+// form). One row per counted event; `bucket` is a namespaced, hashed key
+// (e.g. "login:ip:<sha256>"). Rows older than a day are pruned lazily.
+model rate_limit_events {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  bucket     String   @db.VarChar(120)
+  created_at DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([bucket, created_at], map: "idx_rate_limit_events_bucket_created")
+  @@index([created_at], map: "idx_rate_limit_events_created")
+}
